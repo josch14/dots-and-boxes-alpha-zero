@@ -1,9 +1,5 @@
 from enum import Enum
 
-class Color:
-    PLAYER_1 = "red" # player 1
-    PLAYER_2 = "green" # player 2
-
 class Value:
     """
     Valid values for lines and boxes.

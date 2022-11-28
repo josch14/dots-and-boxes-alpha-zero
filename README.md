@@ -12,4 +12,7 @@ conda install -c anaconda numpy=1.23.4
 # enable colored print
 conda install -c conda-forge termcolor=1.1.0
 conda install -c anaconda colorama
+
+# pytorch
+conda install pytorch torchvision torchaudio cpuonly -c pytorch
 ```

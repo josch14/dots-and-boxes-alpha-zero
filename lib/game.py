@@ -1,27 +1,21 @@
 # local import
-from constants import GameState, Color, Value
+from .constants import GameState, Value
 
 # system import
 from typing import Tuple, List
 import math
-import sys
 import numpy as np
+import copy
 
-# print grid with colored lines and boxes
-from termcolor import colored
-# to make the ANSI colors used in termcolor work with the windows terminal
-import colorama
-colorama.init()
-
-class DotsAndBoxes:
+class DotsAndBoxesGame:
 
     def __init__(self, size: int=3):
         """
         size: int
-            - size of the grid. Size of n means that there are a total of 
+            - size of the board; size of n means that there are a total of 
             n*n boxes for the players to capture by drawing the lines
             - example: n=2 -> 4 boxes -> 2*n*(n+1) = 2*2*3 = 12 possible lines
-            - the grid with the corresponding line numbers then looks as follow
+            - the board with the corresponding line numbers then looks as follow
             (i.e. first horizontal lines are numbered, then the vertical lines)
                 +  0 + 1  +
                 6    8   10
@@ -41,6 +35,23 @@ class DotsAndBoxes:
         # boxes which can be captured by drawing lines
         self.N_BOXES = size * size
         self.__boxes = np.zeros((size, size)) # Values.FREE
+
+    def __eq__(self, obj):
+        if obj is None:
+            return False
+            
+        if not isinstance(obj, DotsAndBoxesGame):
+            return False
+        
+        if not self.get_player_at_turn() == obj.get_player_at_turn() or \
+            not self.get_state() == obj.get_state() or \
+            not self.get_n_lines_drawn() == obj.get_n_lines_drawn() or \
+            not np.array_equal(self.get_lines_vector(), obj.get_lines_vector()) or \
+            not np.array_equal(self.get_boxes(), obj.get_boxes()):
+
+            return False
+
+        return True
 
 
     """
@@ -146,130 +157,46 @@ class DotsAndBoxes:
 
 
     """
-    Methods to print the game state to console.
-    """
-    def state_string(self) -> str:
-        boxes_player_1 = (self.get_boxes() == Value.PLAYER_1).sum()
-        boxes_player_2 = (self.get_boxes() == Value.PLAYER_2).sum()
-        str = f"Game State: {self.__state.value}, " \
-            "Score: (" + \
-            colored("Player 1", Color.PLAYER_1) + \
-            f") {boxes_player_1}:{boxes_player_2} (" + \
-            colored("Player 2", Color.PLAYER_2) + ")"
-        return str
-
-    def grid_string(self) -> str:
-        if self.SIZE > 6:
-            sys.exit("ERROR: To ensure the output quality in the console, " + \
-                "the grid size of games that are prointed is limited to 6.\n")
-
-        str = ""
-
-        def value_to_color(value: int):
-            return Color.PLAYER_1 if value == Value.PLAYER_1 else Color.PLAYER_2
-
-
-        def str_horizontal_line(line: int, last_column: bool) -> str:
-            
-            value = self.get_line_value(line)
-            color = value_to_color(value)
-
-            str = "+" + colored("------", color) if value > 0 else \
-                    "+  {: >2d}  ".format(line)
-            return (str + "+") if last_column else str
-
-
-        def str_vertical_line(left_line: int, print_line_number: bool) -> str:
-
-            value = self.get_line_value(left_line)
-            color = value_to_color(value)
-
-            if value > 0:
-                str = colored("|", color) # line with line color
-
-                # color the box if the box right to the line is already captured
-                box_value = self.get_box_value(
-                    box=self.get_boxes_of_line(left_line)[-1]
-                )
-                if box_value == Value.FREE:
-                    return str + "      "
-                else:
-                    color = value_to_color(box_value)
-                    return str + colored("======", color)
-
-            else:
-                if print_line_number:
-                    return "{: >2d}     ".format(left_line)
-                else:
-                    return "       "
-
-
-        # iterate through boxes from top to bottom, left to right
-        for i in range(self.SIZE):
-
-            # 1) use top line
-            for j in range(self.SIZE):
-                str += str_horizontal_line(
-                    line=self.get_lines_of_box((i, j))[0], 
-                    last_column=(j == self.SIZE - 1)
-                )
-            str += "\n"
-
-            # 2) use left and right lines
-            for repeat in range(3):
-                for j in range(self.SIZE):
-                    str += str_vertical_line(
-                        left_line=self.get_lines_of_box((i, j))[2], 
-                        print_line_number=(repeat == 1)
-                    )
-
-                # last vertical line in a row
-                right_line=self.get_lines_of_box((i, self.SIZE-1))[3]
-                value = self.get_line_value(right_line)
-                if value > 0:
-                    str += colored("|", value_to_color(value))
-                else:
-                    if repeat == 1:
-                        str += f"{right_line}"
-                str += "\n"
-
-            # 3) print bottom lines for the last row of boxes
-            if i == self.SIZE - 1:
-                for j in range(self.SIZE):
-                    str += str_horizontal_line(
-                        line=self.get_lines_of_box((i, j))[1], 
-                        last_column=(j == self.SIZE - 1)
-                    )
-                str += "\n"
-        return str
-        
-
-    """
     Class getters.
     """
-    def get_line_value(self, line: int):
+    def get_lines_vector(self) -> np.ndarray:
+        return self.__lines_vector
+
+    def get_line_value(self, line: int) -> Value:
         assert 0 <= line and line < self.N_LINES, \
             f"Invalid line number (received {line}, limits: [0, {self.N_LINES}))."
         return self.__lines_vector[line]
 
-    def get_box_value(self, box: Tuple[int, int]):
+    def get_box_value(self, box: Tuple[int, int]) -> Value:
         return self.__boxes[box[0], box[1]]
 
-    def get_n_lines_drawn(self):
+    def get_n_lines_drawn(self) -> int:
         return self.__n_lines_drawn
 
-    def get_player_at_turn(self):
+    def get_player_at_turn(self) -> Value:
         return self.__player_at_turn
 
-    def get_boxes(self):
+    def get_boxes(self) -> np.ndarray:
         return self.__boxes
 
-    def is_running(self):
+    def is_running(self) -> bool:
         return self.__state == GameState.RUNNING
+
+    def get_state(self) -> GameState:
+        return self.__state
+
+    def get_valid_moves(self) -> List[int]:
+        return np.where(self.__lines_vector == Value.FREE)[0].tolist()
+
+    def copy(self):
+        return copy.deepcopy(self)
+
 
     """
     Class setters.
     """
+    # def set_player_at_turn(self, player_at_turn: int):
+    #     self
     def set_line_value(self, line: int, value: int) -> None:
         assert 0 <= line and line < self.N_LINES, \
             "Invalid line number."
@@ -290,5 +217,17 @@ class DotsAndBoxes:
 
     def capture_box(self, i: int, j: int, player: int) -> None:
         assert player in [Value.PLAYER_1, Value.PLAYER_2], \
-            "Box needs by captured by a Player."
+            "Box needs to be captured by a Player."
         self.__boxes[i][j] = player
+
+
+game = DotsAndBoxesGame(3)
+game2 = DotsAndBoxesGame(3)
+game.draw_line(1)
+game.draw_line(2)
+game2.draw_line(1)
+game2.draw_line(2)
+
+a = [game]
+
+print(game == game2)
