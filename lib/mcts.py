@@ -25,17 +25,18 @@ class AZNode:
         # only root node has no parent
         if parent is not None:
             assert isinstance(parent, AZNode)
+            for child in parent.children:
+                assert child.s != s and child.a != a, \
+                    "identical node should not yet exist for parent (?)"
 
         # any node except root needs to have a corresponding move
         assert (parent is None and a is None) or \
             (parent is not None and a is not None)
         
-        # create link with parent node
-        for child in parent.children:
-            assert child.s != s and child.a != a, \
-                "identical node should not yet exist for parent (?)"
 
-        parent.children.append(self)
+        # create link with parent node
+        if parent is not None:
+            parent.children.append(self)
 
         # input parameters
         self.parent = parent
@@ -73,8 +74,9 @@ class MCTS:
         self.model = model
 
         p, _ = self.model.p_v(
-            lines_vector=game.s.get_lines_vector(),
-            valid_moves=game.s.get_valid_moves())
+            lines_vector=game.get_lines_vector(),
+            valid_moves=game.get_valid_moves()
+        )
 
         # root node of the search tree (has no parent) 
         root = AZNode(

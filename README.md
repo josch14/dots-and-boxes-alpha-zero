@@ -8,8 +8,9 @@ conda create -n azero_dab python=3.9
 conda activate azero_dab
 
 conda install -c anaconda numpy=1.23.4
+conda install -c conda-forge tqdm
 
-# enable colored print
+# enable colored print for playing in console
 conda install -c conda-forge termcolor=1.1.0
 conda install -c anaconda colorama
 

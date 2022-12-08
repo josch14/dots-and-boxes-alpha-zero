@@ -1,17 +1,51 @@
+import torch
 from torch import nn
 import numpy as np
 from typing import Tuple, List
 
+
 class AZNeuralNetwork(nn.Module):
 
-    def __init__(self, in_dim: int, out_dim: int):
+    def __init__(self, io_dim: int, hidden_dim: int, dropout: float=0.2):
         super(AZNeuralNetwork, self).__init__()
 
-        # TODO implement
-        # self.linear = nn.Linear(in_dim, out_dim)
+        # input layer
+        self.linear = nn.Linear(io_dim, hidden_dim)
+        self.fc1 = nn.Sequential(
+            nn.Linear(io_dim, hidden_dim),
+            nn.ReLU(),
+            # nn.BatchNorm1d(hidden_dim),
+            nn.Dropout(dropout)
+        )
+
+        self.fc2 = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            # nn.BatchNorm1d(hidden_dim),
+            nn.Dropout(dropout)
+        )
+
+        # last core layer
+        self.fc3 = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            # nn.BatchNorm1d(hidden_dim),
+            nn.Dropout(dropout)
+        )
+
+        # output layers
+        self.p = nn.Sequential(
+            nn.Linear(hidden_dim, io_dim),
+            nn.Softmax(),
+        )
+
+        self.v = nn.Sequential(
+            nn.Linear(hidden_dim, 1),
+            nn.Tanh(),
+        )
 
 
-    def forward(self, lines_vector: np.ndarray) -> Tuple[np.ndarray, float]:
+    def forward(self, x):
         """
         Deep neural network f(s) = (p,v) implementation with 
         - p (policy): probability distribution P(a,s) over moves (vector)
@@ -25,24 +59,37 @@ class AZNeuralNetwork(nn.Module):
             p: numpy array of same length as the input vector
             v: float in [-1,1]
 
+        NOTE: Input to e.g. nn.Linear is expected to be [batch_size, features].
+              Thereofre, single vectors have to be fed as row vectors.
         """
-        # TODO implement
-        p = np.zeros((lines_vector.shape[0], 1))
-        v = 0.0
+        x = self.fc1(x)
+        x = self.fc2(x)
+        x = self.fc3(x)
+
+        p = self.p(x) 
+        v = self.v(x)
         return p, v
 
 
-    def p_v(self, lines_vector: np.ndarray, valid_moves: List[int]):
+    def p_v(self, lines_vector: np.ndarray, valid_moves: List[int]) -> Tuple[np.ndarray, float]:
         """
         Simple forward using the model, but ensure that in p (policy vector) 
-        unvalid moves have probability 0, while sum over p is 1
+        unvalid moves have probability 0, while sum over p is 1.
+        Assumes that the result will never require gradient (.detach()).
         """
-        # get probability distribution, with possible p > 0 for invalid moves
-        p, v = self.forward(lines_vector)
 
-        # erase values for non-valid moves
-        valids = np.zeros((lines_vector.shape[0], 1))
+        p, v = self.forward(
+            torch.from_numpy(lines_vector) # model expects torch tensor
+        )
+
+        # cpu only necessary when gpu is used
+        p = p.detach().cpu().numpy()
+        v = v.detach().cpu().item()
+
+        # p possibly contains p > 0 for invalid moves -> erase those
+        valids = np.zeros((lines_vector.shape[1], 1))
         valids[valid_moves] = 1
+        
         p = np.multiply(p, valids)
 
         # normalization to 1

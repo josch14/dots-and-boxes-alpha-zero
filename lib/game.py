@@ -30,7 +30,8 @@ class DotsAndBoxesGame:
 
         # lines
         self.__n_lines_drawn = 0 
-        self.__lines_vector = np.zeros((self.N_LINES, 1)) # Values.FREE
+        self.__lines_vector = np.zeros((1, self.N_LINES), dtype=np.float32) # Values.FREE
+        # torch uses float32, and expects features as row vectors
 
         # boxes which can be captured by drawing lines
         self.N_BOXES = size * size
@@ -219,15 +220,3 @@ class DotsAndBoxesGame:
         assert player in [Value.PLAYER_1, Value.PLAYER_2], \
             "Box needs to be captured by a Player."
         self.__boxes[i][j] = player
-
-
-game = DotsAndBoxesGame(3)
-game2 = DotsAndBoxesGame(3)
-game.draw_line(1)
-game.draw_line(2)
-game2.draw_line(1)
-game2.draw_line(2)
-
-a = [game]
-
-print(game == game2)
