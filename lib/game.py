@@ -30,8 +30,8 @@ class DotsAndBoxesGame:
 
         # lines
         self.__n_lines_drawn = 0 
-        self.__lines_vector = np.zeros((1, self.N_LINES), dtype=np.float32) # Values.FREE
-        # torch uses float32, and expects features as row vectors
+        self.__lines_vector = np.zeros((self.N_LINES,), dtype=np.float32) # Values.FREE
+        # torch uses float32
 
         # boxes which can be captured by drawing lines
         self.N_BOXES = size * size
@@ -93,10 +93,10 @@ class DotsAndBoxesGame:
         else:
             # box was captured
             # check if match is finished now
-            self.check_finished()
+            self.__check_finished()
 
 
-    def check_finished(self) -> None:
+    def __check_finished(self) -> None:
         # player reached necessary number of boxes to capture to win the game
         boxes_to_win = math.floor(self.get_boxes().size / 2) + 1
 

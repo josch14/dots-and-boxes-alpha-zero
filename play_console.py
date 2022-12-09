@@ -26,11 +26,14 @@ def main():
         print(player_str, end="")
 
         # process draw request
-        line = int(input())
+        while True:
+            line = int(input())
+            if line in game.get_valid_moves():
+                break
+            print(f"Line {line} is not a valid move. Please select a move in {game.get_valid_moves()}.")
         game.draw_line(line)
-        # TODO Parse input 1) check: int 2) check: move can be executed
 
-        # print new game statey
+        # print new game state
         print()
         print(game.state_string())
         print(game.board_string())

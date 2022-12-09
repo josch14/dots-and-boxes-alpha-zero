@@ -3,6 +3,7 @@ from torch import nn
 import numpy as np
 from typing import Tuple, List
 
+import logging as log
 
 class AZNeuralNetwork(nn.Module):
 
@@ -74,10 +75,11 @@ class AZNeuralNetwork(nn.Module):
     def p_v(self, lines_vector: np.ndarray, valid_moves: List[int]) -> Tuple[np.ndarray, float]:
         """
         Simple forward using the model, but ensure that in p (policy vector) 
-        unvalid moves have probability 0, while sum over p is 1.
+        invalid moves have probability 0, while sum over p is 1.
         Assumes that the result will never require gradient (.detach()).
         """
 
+        # lines_vector is column vector, model/torch expects features in rows
         p, v = self.forward(
             torch.from_numpy(lines_vector) # model expects torch tensor
         )
@@ -87,13 +89,25 @@ class AZNeuralNetwork(nn.Module):
         v = v.detach().cpu().item()
 
         # p possibly contains p > 0 for invalid moves -> erase those
-        valids = np.zeros((lines_vector.shape[1], 1))
+        valids = np.zeros(lines_vector.shape)
         valids[valid_moves] = 1
-        
+
         p = np.multiply(p, valids)
 
-        # normalization to 1
-        p /= np.sum(p)
+        # # normalization to 1
+        if np.sum(p) > 0:
+            p /= np.sum(p)
+        else:
+            # no move has a probability > 0. This means that either
+            # (1) model returned p(a)=0 for all moves (unlikely to occur)
+            # (2) there is no valid move left, i.e., the game is actually finished
+            # In case of (2), probability of all moves is set equally
+            # TODO sensible? During training with MCTS, this situation shouldn't really occur?
+            assert not len(valid_moves) > 0 and np.sum(p) == 0, \
+                "Model returned p(a)=0 for all moves."
+            log.error("No valid move left. Model output p is set equally for all moves.")
+            p = [1] * lines_vector.shape[0]
+            p /= np.sum(p)
 
         return p, v
         

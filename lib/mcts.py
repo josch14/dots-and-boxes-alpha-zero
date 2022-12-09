@@ -1,3 +1,4 @@
+from typing import Tuple
 
 from .game import DotsAndBoxesGame
 from .model import AZNeuralNetwork
@@ -17,9 +18,9 @@ class AZNode:
     """
     def __init__(
         self,
-        parent, # parent node
-        a: int, # move to get here
-        s: DotsAndBoxesGame, # current game state
+        parent,               # parent node
+        a: int,               # move to get here
+        s: DotsAndBoxesGame,  # current game state
         P: np.ndarray): # prior probabilities
 
         # only root node has no parent
@@ -69,86 +70,61 @@ class AZNode:
 
 class MCTS:
 
-    def __init__(self, model: AZNeuralNetwork, game: DotsAndBoxesGame) -> None:
+    def __init__(self, model: AZNeuralNetwork, game: DotsAndBoxesGame, n_simulations: int) -> None:
 
         self.model = model
-
-        p, _ = self.model.p_v(
-            lines_vector=game.get_lines_vector(),
-            valid_moves=game.get_valid_moves()
-        )
+        self.n_simulations = n_simulations
 
         # root node of the search tree (has no parent) 
-        root = AZNode(
+        self.root = AZNode(
             parent=None,
             a=None,
             s=game,
-            P=p
+            P=self.model.p_v(
+                lines_vector=game.get_lines_vector(),
+                valid_moves=game.get_valid_moves()
+            )[0]
         )
 
-        v = self.simulate(root)
 
-        """ Play
-        d) Once the search is complete, search probabilities π are returned, 
-        proportional to N^(1/τ), where N is the visit count of each move from the 
-        root state and τ is a parameter controlling temperature.
+
+
+    def calculate_probabilities(self, temp: int) -> [float]:
+        """
+        Paper: MCTS may be viewed as a self-play algorithm that, given neural network parameters and a root position s,
+        computes a vector of search probabilities pi recommending moves to play (refers to (d) Play).
+        The move probabilities are proportional to the exponentiated visit count for each move,
+        i.e., pi(a) ~ N(s,a)^(1/temp) with
+        - N being the visit count of each move from the root state
+        - temp being a temperature controlling parameter.
         """
 
-        # TODO end of N simulations: determine next move (the most visited move)
+        for i in range(self.n_simulations):
+            self.search(self.root)
 
-    
-    def expand(self, parent: AZNode, a: int) -> None:
-        """
-        Applying a on parent node with state s means approchaing a leaf.
+        s_root = self.root.s
 
-        b) Expand and Evaluate
-        The leaf node is expanded and the associated position s is evaluated 
-        by the neural network (P(s, ·),V(s)) = fθ(s); the vector of P values 
-        are stored in the outgoing edges from s.
-        """
+        # only valid moves may have a visit
+        assert set(list(self.root.N.keys())).issubset(set(s_root.get_valid_moves())), \
+            "Only valid moves may have a visit.\n" \
+            f"- Visited moves: {set(list(self.root.N.keys()))}\n" \
+            f"- Valid moves: {set(s_root.get_valid_moves())}"
 
-        # determine new game state
-        s = parent.s.copy()
-        s.draw_line(a)
+        # probability vector should contain value for each line and should be 0 when line is already drawn
+        counts = [self.root.N[a] if a in self.root.N else 0 for a in range(s_root.N_LINES)]
 
-        p, v = self.model.p_v(
-            lines_vector=s.get_lines_vector(),
-            valid_moves=s.get_valid_moves())
+        if temp == 0:
+            max_idx = np.array(counts).argmax()  # returns first index which contains the maximum
+            probs = [0] * len(counts)
+            probs[max_idx] = 1
+            return probs
 
-        # create leaf
-        leaf = AZNode(parent=parent, a=a, s=s, P=p)
+        # pi(a) ~ N(s,a)^(1/temp)
+        probs = [n ** (1. / temp) for n in counts]
+        probs = [p / float(sum(probs)) for p in probs]
+        return probs
 
-        # NOTE 
-        # the leaf will not carry any Q or N value (e..g, the visit count for the edge
-        # from parent to the leaf will be incremented in the parent's N)
-
-        # we expanded the tree, and return v as calculated by the neural network
-        # -> game will not be played until the end
-        return leaf, v
-
-
-    def backup(self, node: AZNode, a: int, v: float):
-        """
-        (c) Backup
-        Action value Q is updated to track the mean of all evaluations V 
-        in the subtree below that action.
-        """
-
-        # update Q and N values of node
-        if a in node.N:
-            # child was visited before
-            n = node.N[a]
-            q = node.Q[a]
-            node.Q[a] = (n * q + v) / (n + 1) # Q is average v value
-            node.N[a] += 1
-
-        else:
-            # child is leaf that was jsut created
-            node.Q[a] = v
-            node.N[a] = 1
-        
-
-    def simulate(self, node: AZNode) -> float:
+    def search(self, node: AZNode) -> float:
 
         # when the game is finished before reaching a non-visited node, 
         # return the score v (neural network not necessary here for v)
@@ -222,12 +198,12 @@ class MCTS:
         if a not in node.N:
             # applying a_opt means approaching a leaf, i.e., a game state
             # that was not visited before
-            child, v_child = self.expand(parent=node)
+            child, v_child = self.expand(parent=node, a=a)
 
         else:
             # continue traversing, i.e. call method recursively
             child = node.get_child_by_move(a)
-            v_child = self.simulate(child)
+            v_child = self.search(child)
 
 
         # we now have a score v for the child node, either 1) by reaching a leaf 
@@ -245,3 +221,54 @@ class MCTS:
         self.backup(node, a, v)
 
         return v
+
+
+
+    def expand(self, parent: AZNode, a: int) -> Tuple[AZNode, float]:
+        """
+        Applying move a on parent node with state s means approaching a leaf.
+
+        b) Expand and Evaluate
+        The leaf node is expanded and the associated position s is evaluated
+        by the neural network (P(s, ·),V(s)) = fθ(s); the vector of P values
+        are stored in the outgoing edges from s.
+        """
+
+        # determine new game state
+        s = parent.s.copy()
+        s.draw_line(a)
+
+        p, v = self.model.p_v(
+            lines_vector=s.get_lines_vector(),
+            valid_moves=s.get_valid_moves())
+
+        # create leaf
+        leaf = AZNode(parent=parent, a=a, s=s, P=p)
+
+        # NOTE
+        # the leaf will not carry any Q or N value (e.g., the visit count for the edge from parent to
+        # the leaf will be incremented with the parent's visit count N)
+
+        # we expanded the tree, and return v as calculated by the neural network
+        # -> game will not be played until the end
+        return leaf, v
+
+    def backup(self, node: AZNode, a: int, v: float):
+        """
+        (c) Backup
+        Action value Q is updated to track the mean of all evaluations V
+        in the subtree below that action.
+        """
+
+        # update Q and N values of node
+        if a in node.N:
+            # child was visited before
+            n = node.N[a]
+            q = node.Q[a]
+            node.Q[a] = (n * q + v) / (n + 1) # Q is average v value
+            node.N[a] += 1
+
+        else:
+            # child is leaf that was jsut created
+            node.Q[a] = v
+            node.N[a] = 1
