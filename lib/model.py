@@ -119,26 +119,6 @@ class AZNeuralNetwork(nn.Module):
         move = p.argmax()
         return move
 
-    def train(self, examples) -> None:
-        """
-        Train the neural network with examples obtained from MCTS/self-play. The 
-        neural network parameters are updated to .. 
-        1) .. maximize the similarity of the policy vector p to the search 
-           probabilities π, and to
-        2) .. minimize the error between predicted winner v and game winner z
-        """
-
-        """
-        Input:
-            examples: a list of training examples, where each example is of form
-                      (board, pi, v). pi is the MCTS informed policy vector for
-                      the given board, and v is its value. The examples has
-                      board in its canonical form.
-
-        """
-       # TODO implement
-       pass
-
 
     # TODO rewrite / implement
     def save_checkpoint(self, folder, filename):

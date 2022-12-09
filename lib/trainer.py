@@ -1,6 +1,7 @@
 from random import shuffle
 
 import numpy as np
+import torch
 
 from .arena import Arena
 from .constants import GameState, Value
@@ -13,11 +14,12 @@ from tqdm import tqdm
 
 # initialize logging
 import logging as logging
-logging.basicConfig(level = logging.INFO)
+
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("Trainer")
 
 
-class Trainer():
+class Trainer:
     """
     Execute self-play + learning. 
     """
@@ -34,10 +36,10 @@ class Trainer():
         )
 
     def train(self,
-              num_epochs: int = 10,
-              num_plays: int = 10,
+              epochs: int = 10,
+              num_plays: int = 50,
               temp_move_threshold: int = 3,
-              n_simulations: int = 50,
+              n_simulations: int = 100,
               arena_win_fraction: float = 0.55,
               arena_n_games: int = 1000):
         """
@@ -49,26 +51,23 @@ class Trainer():
         and is accepted only when it wins a specific fraction of games.
         """
 
-        for i in range(1, num_epochs + 1):
-            log.info(f"Progress: Epoch {i}/{num_epochs}")
+        for epoch in range(1, epochs + 1):
+            log.info(f"Progress: Epoch {epoch}/{epochs}")
 
-            train_examples = []
+            # 1) perform self-play to obtain training data
             log.info(f"Performing self-play ..")
+            train_examples = self.perform_self_plays(
+                num_plays=num_plays,
+                n_simulations=n_simulations,
+                temp_move_threshold=temp_move_threshold
+            )
 
-            self.model.eval()
-            for _ in tqdm(range(num_plays)):
-                # single iteration of self-play
-                train_examples += self.single_self_play(
-                    n_simulations=n_simulations,
-                    temp_move_threshold=temp_move_threshold
-                )
-            shuffle(train_examples)
-
-            # train the current model using the collect examples
-            prev_model = copy.deepcopy(self.model)
-
-            # self.model.train()
-            # self.model.train(train_examples)
+            # train the current model using generated data
+            log.info(f"Training the neural network using generated data ..")
+            prev_model = copy.deepcopy(self.model)  # save neural network in its current state for comparison
+            self.perform_model_update(
+                train_examples=train_examples
+            )
 
             # model comparison
             log.info(f"Trained model plays against previous version ..")
@@ -91,8 +90,78 @@ class Trainer():
                 log.info("Continuing with previous model.")
                 self.model = prev_model
 
+    def perform_model_update(self, train_examples):
+        """
+        Train the neural network with examples obtained from MCTS/self-play. The
+        neural network parameters are updated to ..
+        1) .. maximize the similarity of the policy vector p to the search
+           probabilities π, and to
+        2) .. minimize the error between predicted winner v and game winner z
+        """
 
-    def single_self_play(self, n_simulations, temp_move_threshold):
+        """
+        Input:
+            examples: a list of training examples, where each example is of form
+                      (board, pi, v). pi is the MCTS informed policy vector for
+                      the given board, and v is its value. The examples has
+                      board in its canonical form.
+
+        """
+
+        # run a complete training for a neural network
+        epochs = 100
+        learning_rate = 0.001
+        batch_size = 32
+        momentum = 0.9
+
+        optimizer = torch.optim.SGD(
+            self.model.parameters(),
+            lr=learning_rate,
+            momentum=momentum
+        )
+
+        # prepare data
+        shuffle(train_examples)
+        x = [e[0] for e in train_examples]
+        p = [e[1] for e in train_examples]
+        v = [e[2] for e in train_examples]
+
+        x_batched, p_batched, v_batched = [], [], []
+        for i in range(0, len(train_examples), batch_size):
+            x_batched += [torch.Tensor(x[i:i + batch_size])]
+            p_batched += [torch.Tensor(p[i:i + batch_size])]
+            v_batched += [torch.Tensor(v[i:i + batch_size])]
+
+        self.model.train()
+
+        CrossEntropyLoss = torch.nn.CrossEntropyLoss()
+        MSELoss = torch.nn.MSELoss()
+
+        for epoch in range(epochs):
+            print(f"Model Training: Epoch {epoch}")
+
+            for i in range(len(x_batched)):
+                optimizer.zero_grad()
+
+                p, v = self.model.forward(x_batched[i])
+
+                loss = CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
+                loss.backward()
+                optimizer.step()
+
+
+    def perform_self_plays(self, num_plays, n_simulations, temp_move_threshold):
+        train_examples = []
+        self.model.eval()
+        for _ in tqdm(range(num_plays)):
+            # single iteration of self-play
+            train_examples += self.perform_single_self_play(
+                n_simulations=n_simulations,
+                temp_move_threshold=temp_move_threshold
+            )
+        return train_examples
+
+    def perform_single_self_play(self, n_simulations, temp_move_threshold):
         """
         Performs a single episode of self-play (until the game end).
         During playing, each turn results in a training example.
