@@ -6,6 +6,7 @@ from typing import Tuple, List
 import math
 import numpy as np
 import copy
+from random import randint
 
 class DotsAndBoxesGame:
 
@@ -23,7 +24,8 @@ class DotsAndBoxesGame:
                 7    9   11
                 +  4 + 5  +   
         """
-        self.__player_at_turn = Value.PLAYER_1
+
+        self.__player_at_turn = Value.PLAYER_1 if randint(1, 2) == 1 else Value.PLAYER_2
         self.__state = GameState.RUNNING
         self.SIZE = size
         self.N_LINES = 2 * size * (size + 1)

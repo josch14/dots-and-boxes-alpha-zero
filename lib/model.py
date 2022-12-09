@@ -3,7 +3,10 @@ from torch import nn
 import numpy as np
 from typing import Tuple, List
 
-import logging as log
+# initialize logging
+import logging as logging
+logging.basicConfig(level = logging.INFO)
+log = logging.getLogger("AZNeuralNetwork")
 
 class AZNeuralNetwork(nn.Module):
 
@@ -37,7 +40,7 @@ class AZNeuralNetwork(nn.Module):
         # output layers
         self.p = nn.Sequential(
             nn.Linear(hidden_dim, io_dim),
-            nn.Softmax(),
+            nn.Softmax(dim=0),  # TODO check whether this is fine for train when batches are used
         )
 
         self.v = nn.Sequential(
@@ -110,8 +113,11 @@ class AZNeuralNetwork(nn.Module):
             p /= np.sum(p)
 
         return p, v
-        
 
+    def determine_move(self, lines_vector: np.ndarray, valid_moves: List[int]):
+        p, _ = self.p_v(lines_vector, valid_moves)
+        move = p.argmax()
+        return move
 
     def train(self, examples) -> None:
         """
@@ -122,7 +128,6 @@ class AZNeuralNetwork(nn.Module):
         2) .. minimize the error between predicted winner v and game winner z
         """
 
-        # TODO rewrite / implement
         """
         Input:
             examples: a list of training examples, where each example is of form
@@ -131,7 +136,8 @@ class AZNeuralNetwork(nn.Module):
                       board in its canonical form.
 
         """
-        pass
+       # TODO implement
+       pass
 
 
     # TODO rewrite / implement

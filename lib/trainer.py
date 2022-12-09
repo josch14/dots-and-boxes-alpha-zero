@@ -1,13 +1,20 @@
+from random import shuffle
+
 import numpy as np
 
+from .arena import Arena
 from .constants import GameState, Value
 from .game import DotsAndBoxesGame
 from .model import AZNeuralNetwork
 from .mcts import MCTS
 
 import copy
-import logging as log
 from tqdm import tqdm
+
+# initialize logging
+import logging as logging
+logging.basicConfig(level = logging.INFO)
+log = logging.getLogger("Trainer")
 
 
 class Trainer():
@@ -15,12 +22,12 @@ class Trainer():
     Execute self-play + learning. 
     """
 
-    def __init__(self, size: int = 3):
+    def __init__(self, game_size: int = 3):
 
-        self.size = size
+        self.game_size = game_size
 
         # model that is to be trained, and opponent
-        n_lines = 2*size*(size+1)
+        n_lines = 2 * game_size * (game_size + 1)
         self.model = AZNeuralNetwork(
             io_dim=n_lines,
             hidden_dim=n_lines
@@ -28,10 +35,11 @@ class Trainer():
 
     def train(self,
               num_epochs: int = 10,
-              num_plays: int = 50,
-              win_fraction: float = 0.6,
+              num_plays: int = 10,
               temp_move_threshold: int = 3,
-              n_simulations: int = 100):
+              n_simulations: int = 50,
+              arena_win_fraction: float = 0.55,
+              arena_n_games: int = 1000):
         """
         Perform numEpochs epochs of training. 
         During each epoch, a specific number of games of self-play are performed, 
@@ -41,22 +49,49 @@ class Trainer():
         and is accepted only when it wins a specific fraction of games.
         """
 
-        prev_model = copy.deepcopy(self.model)
-
         for i in range(1, num_epochs + 1):
             log.info(f"Progress: Epoch {i}/{num_epochs}")
 
             train_examples = []
             log.info(f"Performing self-play ..")
 
+            self.model.eval()
             for _ in tqdm(range(num_plays)):
                 # single iteration of self-play
                 train_examples += self.single_self_play(
                     n_simulations=n_simulations,
                     temp_move_threshold=temp_move_threshold
                 )
+            shuffle(train_examples)
 
-            # TODO use training examples to train the model
+            # train the current model using the collect examples
+            prev_model = copy.deepcopy(self.model)
+
+            # self.model.train()
+            # self.model.train(train_examples)
+
+            # model comparison
+            log.info(f"Trained model plays against previous version ..")
+            arena = Arena(
+                game_size=self.game_size,
+                model1=self.model,
+                model2=prev_model,
+                n_games=arena_n_games,
+                win_fraction=arena_win_fraction
+            )
+            wins_trained_model, wins_prev_model, draws = arena.compare()
+            trained_model_win_percent = wins_trained_model / arena_n_games
+
+            log.info(f"Compare results: (trained model) {wins_trained_model}:{wins_prev_model} (previous model). "
+                     f"Trained model won {round(trained_model_win_percent * 100, 2)}% of the games ({round(arena_win_fraction * 100, 2)}% needed).")
+
+            if trained_model_win_percent >= arena_win_fraction:
+                log.info("Continuing with trained model.")
+            else:
+                log.info("Continuing with previous model.")
+                self.model = prev_model
+
+
     def single_self_play(self, n_simulations, temp_move_threshold):
         """
         Performs a single episode of self-play (until the game end).
@@ -82,7 +117,7 @@ class Trainer():
 
         # At each time-step t, an MCTS is executed using the previous iteration of the neural network
         # and a move is played by sampling the search probabilities
-        game = DotsAndBoxesGame(self.size)
+        game = DotsAndBoxesGame(self.game_size)
         n_moves = 0
 
         # dataset train, containing lists of [lines_vector, probs, v]
@@ -90,7 +125,7 @@ class Trainer():
 
         # iteration over time stop t in game
         while True:
-            game = game.copy() # TODO check when this is necessary
+            game = game.copy()  # TODO check when this is necessary
             mtcs = MCTS(
                 model=self.model,
                 game=game,

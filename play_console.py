@@ -16,7 +16,7 @@ def main():
     print(game.state_string())
     print(game.board_string())
 
-    while (game.is_running()):
+    while game.is_running():
         
         # print draw request
         color = Color.PLAYER_1 if game.get_player_at_turn() == Value.PLAYER_1 \
