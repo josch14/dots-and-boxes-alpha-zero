@@ -5,49 +5,69 @@ from typing import Tuple, List
 
 # initialize logging
 import logging as logging
-logging.basicConfig(level = logging.INFO)
+
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("AZNeuralNetwork")
+
 
 class AZNeuralNetwork(nn.Module):
 
-    def __init__(self, io_dim: int, hidden_dim: int, dropout: float=0.2):
+    def __init__(self, io_units: int, model_parameters: dict):
         super(AZNeuralNetwork, self).__init__()
 
+        self.io_units = io_units
+        self.hidden_units = model_parameters["hidden_units"]
+        self.hidden_layers = model_parameters["hidden_layers"]
+        self.dropout = model_parameters["dropout"]
+        self.initialize_gain = model_parameters["initialize_gain"]
+
         # input layer
-        self.linear = nn.Linear(io_dim, hidden_dim)
-        self.fc1 = nn.Sequential(
-            nn.Linear(io_dim, hidden_dim),
+        linear_in = nn.Linear(self.io_units, self.hidden_units)
+        nn.init.xavier_uniform_(
+            linear_in.weight,
+            gain=nn.init.calculate_gain('relu', self.initialize_gain)
+        )
+        self.fully_connected_in = nn.Sequential(
+            linear_in,
             nn.ReLU(),
-            # nn.BatchNorm1d(hidden_dim),
-            nn.Dropout(dropout)
+            nn.BatchNorm1d(self.hidden_units),
+            nn.Dropout(self.dropout)
         )
 
-        self.fc2 = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            # nn.BatchNorm1d(hidden_dim),
-            nn.Dropout(dropout)
-        )
-
-        # last core layer
-        self.fc3 = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            # nn.BatchNorm1d(hidden_dim),
-            nn.Dropout(dropout)
-        )
+        # hidden layers
+        self.fully_connected_layers = []
+        for i in range(self.hidden_layers - 1):
+            linear = nn.Linear(self.hidden_units, self.hidden_units)
+            nn.init.xavier_uniform_(
+                linear.weight,
+                gain=nn.init.calculate_gain('relu', self.initialize_gain)
+            )
+            self.fully_connected_layers.append(
+                nn.Sequential(
+                    linear,
+                    nn.ReLU(),
+                    nn.BatchNorm1d(self.hidden_units),
+                    nn.Dropout(self.dropout)
+                )
+            )
+        self.fully_connected_layers = nn.ModuleList(self.fully_connected_layers)
 
         # output layers
-        self.p = nn.Sequential(
-            nn.Linear(hidden_dim, io_dim),
-            nn.Softmax(dim=0),  # TODO check whether this is fine for train when batches are used
+        linear_p_out = nn.Linear(self.hidden_units, self.io_units)
+        nn.init.uniform_(linear_p_out.weight, a=0.0, b=1.0)
+        nn.init.uniform_(linear_p_out.bias, a=0.0, b=1.0)
+        self.p_out = nn.Sequential(
+            linear_p_out,
+            nn.Softmax(dim=0),  # TODO check whether this is fine for training when batches are used
         )
 
-        self.v = nn.Sequential(
-            nn.Linear(hidden_dim, 1),
+        linear_v_out = nn.Linear(self.hidden_units, 1)
+        nn.init.uniform_(linear_v_out.weight, a=0.0, b=1.0)
+        nn.init.uniform_(linear_v_out.bias, a=0.0, b=1.0)
+        self.v_out = nn.Sequential(
+            linear_v_out,
             nn.Tanh(),
         )
-
 
     def forward(self, x):
         """
@@ -64,16 +84,16 @@ class AZNeuralNetwork(nn.Module):
             v: float in [-1,1]
 
         NOTE: Input to e.g. nn.Linear is expected to be [batch_size, features].
-              Thereofre, single vectors have to be fed as row vectors.
+              Therefore, single vectors have to be fed as row vectors.
         """
-        x = self.fc1(x)
-        x = self.fc2(x)
-        x = self.fc3(x)
+        x = self.fully_connected_in(x)
 
-        p = self.p(x) 
-        v = self.v(x)
+        for layer in self.fully_connected_layers:
+            x = layer(x)
+
+        p = self.p_out(x)
+        v = self.v_out(x)
         return p, v
-
 
     def p_v(self, lines_vector: np.ndarray, valid_moves: List[int]) -> Tuple[np.ndarray, float]:
         """
@@ -82,17 +102,19 @@ class AZNeuralNetwork(nn.Module):
         Assumes that the result will never require gradient (.detach()).
         """
 
+        # model expects ...
+        lines_vector = torch.from_numpy(lines_vector)  # ... tensor
+        lines_vector = lines_vector.unsqueeze(0)  # ... batch due to batch normalization
+
         # lines_vector is column vector, model/torch expects features in rows
-        p, v = self.forward(
-            torch.from_numpy(lines_vector) # model expects torch tensor
-        )
+        p, v = self.forward(lines_vector)
 
         # cpu only necessary when gpu is used
-        p = p.detach().cpu().numpy()
+        p = p.squeeze().detach().cpu().numpy()
         v = v.detach().cpu().item()
 
         # p possibly contains p > 0 for invalid moves -> erase those
-        valids = np.zeros(lines_vector.shape)
+        valids = np.zeros(lines_vector.squeeze().shape)
         valids[valid_moves] = 1
 
         p = np.multiply(p, valids)
@@ -118,7 +140,6 @@ class AZNeuralNetwork(nn.Module):
         p, _ = self.p_v(lines_vector, valid_moves)
         move = p.argmax()
         return move
-
 
     # TODO rewrite / implement
     def save_checkpoint(self, folder, filename):

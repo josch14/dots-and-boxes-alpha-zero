@@ -11,8 +11,7 @@ class Arena:
                  game_size: int,
                  model1: AZNeuralNetwork,
                  model2: AZNeuralNetwork,
-                 n_games: int,
-                 win_fraction: float):
+                 n_games: int):
         """
         TODO Class Description
         """
@@ -22,7 +21,6 @@ class Arena:
         self.model2 = model2
         self.model2.eval()
         self.n_games = n_games
-        self.win_fraction = win_fraction
 
     def compare(self):
 

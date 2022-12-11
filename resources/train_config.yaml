@@ -1,0 +1,34 @@
+game_size: 3   # board size
+epochs   : 1000  # number of mcts+training+arena iterations
+
+# MCTS parameters
+mcts_parameters:
+  n_games                   : 100
+  n_simulations             : 25
+  temperature_move_threshold: 15
+
+# neural network parameters
+model_parameters:
+  hidden_units  : 128
+  hidden_layers : 2
+  dropout       : 0.2
+  initialize_gain: 0.1
+
+# neural network training: optimizer parameters
+optimizer_parameters:
+  learning_rate: 0.1
+  momentum     : 0.9
+
+# neural network training: training parameters
+training_parameters:
+  epochs    : 100000
+  batch_size: 32
+  patience  : 100
+
+# arena (model comparison) parameters
+arena_parameters:
+  n_games     : 1000
+  win_fraction: 0.55
+
+
+
