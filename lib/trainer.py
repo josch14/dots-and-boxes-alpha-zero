@@ -141,12 +141,13 @@ class Trainer:
         CrossEntropyLoss = torch.nn.CrossEntropyLoss()
         MSELoss = torch.nn.MSELoss()
 
-        for epoch in range(epochs):
+        for epoch in range(1, epochs+1):
             if current_patience > patience:
                 log.info(f"Performance does not improve anymore, model training is stopped after {epoch} epochs.")
                 break
 
-            log.info(f"Model Training: Epoch {epoch}")
+            if epoch % 10 == 0:
+                log.info(f"Model Training: Epoch {epoch}")
 
             # train model
             self.model.train()

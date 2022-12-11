@@ -58,12 +58,12 @@ class AZNeuralNetwork(nn.Module):
         nn.init.uniform_(linear_p_out.bias, a=0.0, b=1.0)
         self.p_out = nn.Sequential(
             linear_p_out,
-            nn.Softmax(dim=0),  # TODO check whether this is fine for training when batches are used
+            nn.Softmax(dim=1),
         )
 
         linear_v_out = nn.Linear(self.hidden_units, 1)
-        nn.init.uniform_(linear_v_out.weight, a=0.0, b=1.0)
-        nn.init.uniform_(linear_v_out.bias, a=0.0, b=1.0)
+        # nn.init.uniform_(linear_v_out.weight, a=0.0, b=1.0) # TODO discuss: initialization sensible?
+        # nn.init.uniform_(linear_v_out.bias, a=0.0, b=1.0)
         self.v_out = nn.Sequential(
             linear_v_out,
             nn.Tanh(),
@@ -92,7 +92,12 @@ class AZNeuralNetwork(nn.Module):
             x = layer(x)
 
         p = self.p_out(x)
-        v = self.v_out(x)
+        v = self.v_out(x).squeeze()  # one-dimensional output
+
+        # TODO remove later (make sure we have probability distribution in each feature vector)
+        # INFO: batches make first dimension
+        for i in range(p.shape[0]):  # iterate over train examples in batch
+            assert 1 - torch.sum(p[i, :]) < 0.00001  # sum of probabilities needs to be 1
         return p, v
 
     def p_v(self, lines_vector: np.ndarray, valid_moves: List[int]) -> Tuple[np.ndarray, float]:
@@ -106,7 +111,6 @@ class AZNeuralNetwork(nn.Module):
         lines_vector = torch.from_numpy(lines_vector)  # ... tensor
         lines_vector = lines_vector.unsqueeze(0)  # ... batch due to batch normalization
 
-        # lines_vector is column vector, model/torch expects features in rows
         p, v = self.forward(lines_vector)
 
         # cpu only necessary when gpu is used
