@@ -1,20 +1,17 @@
 from random import shuffle
-
 import numpy as np
 import torch
-
-from .arena import Arena
-from .constants import GameState, Value
-from .game import DotsAndBoxesGame
-from .model import AZNeuralNetwork
-from .mcts import MCTS
-
 import copy
 from tqdm import tqdm
 
+# local import
+from lib.arena import Arena
+from lib.game import DotsAndBoxesGame
+from lib.mcts import MCTS
+from lib.model import AZNeuralNetwork
+
 # initialize logging
 import logging as logging
-
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("Trainer")
 
@@ -85,7 +82,7 @@ class Trainer:
             wins_trained_model, wins_prev_model, draws = arena.compare()
             win_percent = wins_trained_model / n_games
 
-            log.info(f"Compare results: (trained model) {wins_trained_model}:{wins_prev_model} (previous model). "
+            log.info(f"Compare results: (trained model) {wins_trained_model}:{draws}:{wins_prev_model} (previous model). "
                      f"Trained model won {round(win_percent * 100, 2)}% of the games ({round(win_fraction * 100, 2)}% needed).")
 
             if win_percent >= win_fraction:
@@ -225,7 +222,7 @@ class Trainer:
 
         # iteration over time stop t in game
         while True:
-            game = game.copy()  # TODO check when this is necessary
+            game = copy.deepcopy(game)  # TODO check when this is necessary
             mcts = MCTS(
                 model=self.model,
                 game=game,
@@ -238,30 +235,24 @@ class Trainer:
             probs = mcts.calculate_probabilities(temp=temp)
             # TODO Include Symmetries of current Game State
 
-            train_examples.append([game.get_lines_vector(), probs, game.get_player_at_turn()])  # v is determined later
+            train_examples.append([game.lines_vector, probs, game.player_at_turn])  # v is determined later
 
             # sample move from using probs, and apply move
             move = np.random.choice(
                 a=list(range(game.N_LINES)),
                 p=probs
             )
-            game.draw_line(move)
+            game.execute_move(move)
 
             if not game.is_running():
-                state = game.get_state()
-                if state == GameState.DRAW:
-                    winner = 0
-                elif state == GameState.WIN_PLAYER_1:
-                    winner = Value.PLAYER_1
-                elif state == GameState.WIN_PLAYER_2:
-                    winner = Value.PLAYER_2
+                result = game.result
 
                 # v in {-1, 0, 1}, depending on whether the player lost, draw, or won
                 for i, (_, _, player_at_turn) in enumerate(train_examples):
 
-                    if player_at_turn == winner:
+                    if player_at_turn == result:
                         train_examples[i][2] = 1
-                    elif winner == 0:
+                    elif result == 0:
                         train_examples[i][2] = 0
                     else:
                         train_examples[i][2] = -1

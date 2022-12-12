@@ -1,9 +1,11 @@
+import copy
 from typing import Tuple
-
-from .game import DotsAndBoxesGame
-from .model import AZNeuralNetwork
-from .constants import GameState, Value
 import numpy as np
+
+# local import
+from lib.game import DotsAndBoxesGame
+from lib.model import AZNeuralNetwork
+
 
 class AZNode:
     """
@@ -16,12 +18,13 @@ class AZNode:
     - P(s,a), N(s,a), Q(s,a), i.e., values that depend on s and a, are saved in
       the child node s', the result when executing move a on s
     """
+
     def __init__(
-        self,
-        parent,               # parent node
-        a: int,               # move to get here
-        s: DotsAndBoxesGame,  # current game state
-        P: np.ndarray): # prior probabilities
+            self,
+            parent,  # parent node
+            a: int,  # move to get here
+            s: DotsAndBoxesGame,  # current game state
+            P: np.ndarray):  # prior probabilities
 
         # only root node has no parent
         if parent is not None:
@@ -32,8 +35,7 @@ class AZNode:
 
         # any node except root needs to have a corresponding move
         assert (parent is None and a is None) or \
-            (parent is not None and a is not None)
-        
+               (parent is not None and a is not None)
 
         # create link with parent node
         if parent is not None:
@@ -46,9 +48,9 @@ class AZNode:
         self.P = P  # policies P(s,a) (vector) as returned by the neural network
 
         # further parameters
-        self.children = [] # child nodes
-        self.Q = {} # action values Q(s,a) (dict, with line number as key)
-        self.N = {} # visit counts N(s,a) (dict, with line number as key)
+        self.children = []  # child nodes
+        self.Q = {}  # action values Q(s,a) (dict, with line number as key)
+        self.N = {}  # visit counts N(s,a) (dict, with line number as key)
         self.score = None
 
     def is_root(self) -> bool:
@@ -57,7 +59,7 @@ class AZNode:
     def is_leaf(self) -> bool:
         return True if len(self.children) == 0 else False
 
-    def get_child_by_move(self, a: int):
+    def get_child_by_move(self, a: int) -> AZNode:
         """
         Assumes that the child actually exists.
         """
@@ -65,7 +67,6 @@ class AZNode:
             if child.a == a:
                 return child
         assert False, "Node does not contain a child with given move a."
-
 
 
 class MCTS:
@@ -81,19 +82,16 @@ class MCTS:
             a=None,
             s=game,
             P=self.model.p_v(
-                lines_vector=game.get_lines_vector(),
+                lines_vector=game.lines_vector,
                 valid_moves=game.get_valid_moves()
             )[0]
         )
-
-
-
 
     def calculate_probabilities(self, temp: int) -> [float]:
         """
         Paper: MCTS may be viewed as a self-play algorithm that, given neural network parameters and a root position s,
         computes a vector of search probabilities pi recommending moves to play (refers to (d) Play).
-        The move probabilities are proportional to the exponentiated visit count for each move,
+        The move probabilities are proportional to the exponential of the visit count for each move,
         i.e., pi(a) ~ N(s,a)^(1/temp) with
         - N being the visit count of each move from the root state
         - temp being a temperature controlling parameter.
@@ -134,24 +132,19 @@ class MCTS:
             # .. loses: score = -1
             # .. draw: score = 0
 
-            state = node.s.get_state()
-            player_at_turn = node.s.get_player_at_turn()
+            result = node.s.result
+            player_at_turn = node.s.player_at_turn
 
-            if player_at_turn == Value.PLAYER_1 and \
-                state == GameState.WIN_PLAYER_1:
+            # player_at_turn contains the winner (in case of a winner) after the game is finished
+            # this is because when capturing a box, the player  at turn does not switch
+            if player_at_turn == result:
                 v = 1
-
-            elif player_at_turn == Value.PLAYER_2 and \
-                state == GameState.WIN_PLAYER_2:
-                v = 1
-
-            elif state == GameState.DRAW:
+            elif result == 0:
                 v = 0
-
             else:
                 v = -1
 
-            return v    
+            return v
 
         """
         (a) Select
@@ -171,7 +164,7 @@ class MCTS:
         """
 
         ucb_opt = float('-inf')
-        a_opt = -1 # determine the next move
+        a_opt = -1  # determine the next move
         valid_moves = node.s.get_valid_moves()
 
         for a in valid_moves:
@@ -205,24 +198,21 @@ class MCTS:
             child = node.get_child_by_move(a)
             v_child = self.search(child)
 
-
-        # we now have a score v for the child node, either 1) by reaching a leaf 
+        # we now have a score v for the child node, either 1) by reaching a leaf
         # while traversing (v from neural network) or 2) by finishing game (v is
         # a game score in {-1, 0, 1})
 
         # calculate v of current node using the child node's v
         # if-statement necessary since a player may have two turns in a row
-        # after captuing a box
-        if node.s.get_player_at_turn() == child.s.get_player_at_turn():
+        # after capturing a box
+        if node.s.player_at_turn == child.s.player_at_turn:
             v = v_child
         else:
             v = -v_child
-        
+
         self.backup(node, a, v)
 
         return v
-
-
 
     def expand(self, parent: AZNode, a: int) -> Tuple[AZNode, float]:
         """
@@ -235,11 +225,11 @@ class MCTS:
         """
 
         # determine new game state
-        s = parent.s.copy()
-        s.draw_line(a)
+        s = copy.deepcopy(parent.s)
+        s.execute_move(a)
 
         p, v = self.model.p_v(
-            lines_vector=s.get_lines_vector(),
+            lines_vector=s.lines_vector,
             valid_moves=s.get_valid_moves())
 
         # create leaf
@@ -253,7 +243,7 @@ class MCTS:
         # -> game will not be played until the end
         return leaf, v
 
-    def backup(self, node: AZNode, a: int, v: float):
+    def backup(self, node: AZNode, a: int, v: float) -> None:
         """
         (c) Backup
         Action value Q is updated to track the mean of all evaluations V
@@ -265,10 +255,10 @@ class MCTS:
             # child was visited before
             n = node.N[a]
             q = node.Q[a]
-            node.Q[a] = (n * q + v) / (n + 1) # Q is average v value
+            node.Q[a] = (n * q + v) / (n + 1)  # Q is average v value
             node.N[a] += 1
 
         else:
-            # child is leaf that was jsut created
+            # child is leaf that was just created
             node.Q[a] = v
             node.N[a] = 1

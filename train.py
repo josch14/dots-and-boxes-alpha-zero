@@ -1,5 +1,7 @@
-from lib.trainer import Trainer
 import yaml
+
+# local import
+from lib.trainer import Trainer
 
 
 def main(configuration: dict):

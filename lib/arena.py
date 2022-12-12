@@ -1,9 +1,9 @@
+from typing import Tuple
 from tqdm import tqdm
 
-from lib.constants import GameResult, Value, GameState
+# local import
 from lib.game import DotsAndBoxesGame
 from lib.model import AZNeuralNetwork
-
 
 class Arena:
 
@@ -12,49 +12,42 @@ class Arena:
                  model1: AZNeuralNetwork,
                  model2: AZNeuralNetwork,
                  n_games: int):
-        """
-        TODO Class Description
-        """
+
         self.game_size = game_size
         self.model1 = model1
-        self.model1.eval()
         self.model2 = model2
-        self.model2.eval()
         self.n_games = n_games
 
-    def compare(self):
+    def compare(self) -> Tuple[int, int, int]:
+        self.model1.eval()
+        self.model2.eval()
 
-        wins_model1, wins_model2, draws = 0, 0, 0
+        wins_model_1, wins_model_2, draws = 0, 0, 0
 
         for _ in tqdm(range(self.n_games)):
-            game_result = self.play_game()
-            if game_result == GameResult.WIN_PLAYER_1:
-                wins_model1 += 1
-            elif game_result == GameResult.WIN_PLAYER_2:
-                wins_model2 += 1
+            result = self.play_game()
+
+            if result == 1:
+                wins_model_1 += 1
+            elif result == -1:
+                wins_model_2 += 1
             else:
                 draws += 1
 
-        return wins_model1, wins_model2, draws
+        return wins_model_1, wins_model_2, draws
 
-
-    def play_game(self) -> GameResult:
+    def play_game(self) -> int:
         game = DotsAndBoxesGame(self.game_size)
 
         while game.is_running():
-            lines = game.get_lines_vector()
-            valids = game.get_valid_moves()
-            move = self.model1.determine_move(lines, valids) if game.get_player_at_turn() == Value.PLAYER_1 \
-                else self.model2.determine_move(lines, valids)
+            lines = game.lines_vector
+            valid_moves = game.get_valid_moves()
+            move = self.model1.determine_move(lines, valid_moves) if game.player_at_turn == 1 \
+                else self.model2.determine_move(lines, valid_moves)
 
-            assert move in valids, \
-                print(f"<{move}> is not a valid move. Model should have selected a move in {valids}.")
-            game.draw_line(move)
+            assert move in valid_moves, \
+                print(f"<{move}> is not a valid move. Model should have selected a move in {valid_moves}.")
 
-        state = game.get_state()
-        if state == GameState.DRAW:
-            return GameResult.DRAW
-        if state == GameState.WIN_PLAYER_1:
-            return GameResult.WIN_PLAYER_1
-        if state == GameState.WIN_PLAYER_2:
-            return GameResult.WIN_PLAYER_2
+            game.execute_move(move)
+
+        return game.result

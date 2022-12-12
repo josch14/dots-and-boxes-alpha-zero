@@ -5,7 +5,6 @@ from typing import Tuple, List
 
 # initialize logging
 import logging as logging
-
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("AZNeuralNetwork")
 
@@ -88,6 +87,7 @@ class AZNeuralNetwork(nn.Module):
         """
         x = self.fully_connected_in(x)
 
+        # TODO check whether model input really contains features in rows (i.e., lines vectors -Y transpose necessary?)
         for layer in self.fully_connected_layers:
             x = layer(x)
 
@@ -131,7 +131,9 @@ class AZNeuralNetwork(nn.Module):
             # (1) model returned p(a)=0 for all moves (unlikely to occur)
             # (2) there is no valid move left, i.e., the game is actually finished
             # In case of (2), probability of all moves is set equally
+
             # TODO sensible? During training with MCTS, this situation shouldn't really occur?
+            # Does indeed occur as of right now (mostly after model training)
             assert not len(valid_moves) > 0 and np.sum(p) == 0, \
                 "Model returned p(a)=0 for all moves."
             log.error("No valid move left. Model output p is set equally for all moves.")
