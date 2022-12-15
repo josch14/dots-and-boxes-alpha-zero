@@ -59,7 +59,7 @@ class AZNode:
     def is_leaf(self) -> bool:
         return True if len(self.children) == 0 else False
 
-    def get_child_by_move(self, a: int) -> AZNode:
+    def get_child_by_move(self, a: int):
         """
         Assumes that the child actually exists.
         """
