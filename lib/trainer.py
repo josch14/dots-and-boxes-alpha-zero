@@ -93,6 +93,11 @@ class Trainer:
 
     def perform_model_training(self, train_examples):
         """
+        the neural network’s
+        parameters are updated to make the move probabilities and value (p,
+        v) = fθ(s) more closely match the improved search probabilities and selfplay
+        winner (π, z);
+
         Train the neural network with examples obtained from MCTS/self-play. The
         neural network parameters are updated to ..
         1) .. maximize the similarity of the policy vector p to the search
@@ -225,14 +230,14 @@ class Trainer:
             game = copy.deepcopy(game)  # TODO check when this is necessary
             mcts = MCTS(
                 model=self.model,
-                game=game,
+                s=game,
                 n_simulations=n_simulations,
             )
 
             temp = 1 if n_moves < temperature_move_threshold else 0
             n_moves += 1
 
-            probs = mcts.calculate_probabilities(temp=temp)
+            probs = mcts.play(temp=temp)
             # TODO Include Symmetries of current Game State
 
             train_examples.append([game.lines_vector, probs, game.player_at_turn])  # v is determined later

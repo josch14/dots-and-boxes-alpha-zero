@@ -10,6 +10,23 @@ log = logging.getLogger("AZNeuralNetwork")
 
 
 class AZNeuralNetwork(nn.Module):
+    """
+    Deep neural network f(s) = (p,v), combining the roles of a policy network
+    and value network, with
+    - p (policy vector): vector of move probabilities p = P(a|s)
+    - v (scalar value): probability of the current player winning from position s
+
+    Input:
+        lines_vector: the current board in vector form, where each element
+                      corresponds to a line, having a Value (see enum)
+
+    Returns:
+        p: numpy array of same length as the input vector
+        v: float in [-1,1]
+
+    NOTE: Input to e.g. nn.Linear is expected to be [batch_size, features].
+          Therefore, single vectors have to be fed as row vectors.
+    """
 
     def __init__(self, io_units: int, model_parameters: dict):
         super(AZNeuralNetwork, self).__init__()
@@ -69,22 +86,6 @@ class AZNeuralNetwork(nn.Module):
         )
 
     def forward(self, x):
-        """
-        Deep neural network f(s) = (p,v) implementation with 
-        - p (policy): probability distribution P(a,s) over moves (vector)
-        - v (value): estimation of the current player's winning probability (scalar)     
-        
-        Input:
-            lines_vector: the current board in vector form, where each element
-                          corresponds to a line, having a Value (see enum)
-
-        Returns: 
-            p: numpy array of same length as the input vector
-            v: float in [-1,1]
-
-        NOTE: Input to e.g. nn.Linear is expected to be [batch_size, features].
-              Therefore, single vectors have to be fed as row vectors.
-        """
         x = self.fully_connected_in(x)
 
         # TODO check whether model input really contains features in rows (i.e., lines vectors -Y transpose necessary?)
