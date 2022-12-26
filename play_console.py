@@ -1,4 +1,7 @@
+import copy
 import sys
+
+import numpy as np
 
 # local import
 from lib.game import DotsAndBoxesGame
@@ -19,8 +22,8 @@ def main():
 
         # print draw request
         player_str = colored(
-            f"Player {1 if game.player_at_turn == 1 else 2}",
-            Color.PLAYER_1 if game.player_at_turn == 1 else Color.PLAYER_2
+            f"Player {1 if game.current_player == 1 else 2}",
+            Color.PLAYER_1 if game.current_player == 1 else Color.PLAYER_2
         )
         print(player_str + ": Please enter a free line number: ", end="")
 
@@ -37,6 +40,20 @@ def main():
         print(game.state_string())
         print(game.board_string())
         print()
+
+        print("TESTESTEST")
+        save = np.copy(game.lines_vector)
+        equivalents = game.get_equivalent_positions()
+        for i, s in enumerate(equivalents):
+            print(f"\n\n\nNUM: {i}")
+            game.lines_vector = s
+            print(game.board_string())
+
+        game.lines_vector = save
+
+
+
+
 
     print(game.state_string())
 

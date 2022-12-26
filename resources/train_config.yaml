@@ -1,11 +1,12 @@
-game_size: 3   # board size
-epochs   : 1000  # number of mcts+training+arena iterations
+game_size : 3     # board size
+iterations: 1000  # number of iterations of mcts + training + arena
 
 # MCTS parameters
 mcts_parameters:
-  n_games                   : 100
-  n_simulations             : 25
-  temperature_move_threshold: 15
+  n_games                   : 50
+  n_simulations             : 20
+  temperature_move_threshold: 5
+  c_puct                    : 1    # PUCT algorithm parameter, used in MCTS: select
 
 # neural network parameters
 model_parameters:
@@ -21,9 +22,10 @@ optimizer_parameters:
 
 # neural network training: training parameters
 training_parameters:
-  epochs    : 100000
-  batch_size: 32
-  patience  : 100
+  dataset_size: 50000  # includes rotations and reflections
+  epochs      : 100000
+  batch_size  : 32
+  patience    : 100
 
 # arena (model comparison) parameters
 arena_parameters:

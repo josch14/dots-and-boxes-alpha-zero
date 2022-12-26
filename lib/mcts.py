@@ -1,4 +1,7 @@
 import copy
+import math
+from random import randint
+
 import numpy as np
 
 # local import
@@ -19,12 +22,15 @@ class MCTS:
         node from which the MCTS is executed (with input position s)
     n_simulations : int
         # simulations for each MCTS (only to determine the next move)
+    c_puct : float
+        constant determining level of exploration (PUCT algorithm in select)
     """
 
     def __init__(self,
                  model: AZNeuralNetwork,
                  s: DotsAndBoxesGame,
-                 n_simulations: int) -> None:
+                 n_simulations: int,
+                 c_puct: float) -> None:
 
         self.model = model
         self.root = AZNode(
@@ -33,6 +39,7 @@ class MCTS:
             s=s
         )
         self.n_simulations = n_simulations
+        self.c_puct = c_puct
 
     def play(self, temp: int) -> [float]:
         """
@@ -72,9 +79,9 @@ class MCTS:
             probs[np.array(counts).argmax()] = 1
             return probs
 
-        probs = [n ** (1. / temp) for n in counts]  # pi(a) ~ N(s,a)^(1/temp)
-        probs = [p / float(sum(probs)) for p in
-                 probs]  # ensure probability distribution
+        # pi(a) ~ N(s,a)^(1/temp), while ensuring a probability distribution
+        probs = [n ** (1. / temp) for n in counts]
+        probs = [p / float(sum(probs)) for p in probs]
         return probs
 
     def search(self, node: AZNode) -> float:
@@ -95,11 +102,11 @@ class MCTS:
         # game is finished before reaching a non-visited node
         if not node.s.is_running():
             # return the actual score v for the current player
-            # in case of a winner, player_at_turn contains it (when capturing
+            # in case of a winner, current_player contains it (when capturing
             # a box, the player at turn does not switch)
             result = node.s.result
 
-            if node.s.player_at_turn == result:
+            if node.s.current_player == result:
                 v = 1
             elif result == 0:
                 v = 0
@@ -127,15 +134,14 @@ class MCTS:
         # we now received a score v from the child node, either
         # by reaching a leaf (v in [0,1] as calculated by the neural network) or
         # by finishing the game (v in {-1, 0, 1})
-        v = v_child if node.s.player_at_turn == child.s.player_at_turn else -v_child
+        v = v_child if node.s.current_player == child.s.current_player else -v_child
 
         # backup before returning v
         self.backup(node, a, v)
 
         return v
 
-    @staticmethod
-    def select(node: AZNode) -> int:
+    def select(self, node: AZNode) -> int:
         """
         (a) Select.
         Select the move with maximum action value Q, plus an upper confidence
@@ -151,30 +157,34 @@ class MCTS:
         a_max : int
             move a for which Q(s,a) + U(s,a) is maximized
         """
+        assert len(node.s.get_valid_moves()) > 0
 
         maximum = float('-inf')
         a_max = -1
+
+        N_sum = sum(node.N.values())  # TODO only valid moves relevant here?
+        N_sqrt = math.sqrt(N_sum)
 
         for a in node.s.get_valid_moves():
             # each move corresponds to a child node that may or may not have
             # already been visited
 
-            p = node.P[a]
+            P = node.P[a]
             if a in node.N:
-                q = node.Q[a]
-                n = node.N[a]
+                Q = node.Q[a]
+                N = node.N[a]
             else:
-                q = 0
-                n = 0
+                Q = 0
+                N = 0
 
             # upper confidence bound U(s, a) ~ P(s, a) / (1 + N(s, a))
-            ucb = p / (1 + n)
+            # U = P / (1 + N) # simple version
+            U = self.c_puct * P * N_sqrt / (1 + N)
 
             # maximize action value Q(s,a) + upper confidence bound U(s,a)
-            if q + ucb > maximum:
-                maximum = q + ucb
+            if Q + U > maximum:
+                maximum = Q + U
                 a_max = a
-        assert a_max != -1
 
         return a_max
 
@@ -222,10 +232,12 @@ class MCTS:
         v : float
             probability of the current player winning in position s
         """
-        p, v = self.model.p_v(
-            lines_vector=leaf.s.lines_vector,
-            valid_moves=leaf.s.get_valid_moves()
-        )
+
+        # neural network evaluation is carried out a reflection or rotation selected uniformly at random from i in [1..8]
+        i = randint(0, 7)
+        lines_vector = DotsAndBoxesGame.get_rotations_and_reflections(leaf.s.get_canonical_lines_vector())[i]
+
+        p, v = self.model.p_v(s=lines_vector)
         leaf.P = p
         return v
 

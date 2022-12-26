@@ -5,8 +5,21 @@ from tqdm import tqdm
 from lib.game import DotsAndBoxesGame
 from lib.model import AZNeuralNetwork
 
-class Arena:
+class Arena: # TODO Evaluator
+    """
+    Evaluator. To ensure we always generate the best quality data, we evaluate each
+    new neural network checkpoint against the current best network θ∗ f before using
+    it for data generation. The neural network fθi is evaluated by the performance of
+    an MCTS search αθi that uses fθi to evaluate leaf positions and prior probabilities
+    (see Search algorithm). Each evaluation consists of 400 games, using an MCTS
+    with 1,600 simulations to select each move, using an infinitesimal temperature
+    τ→ 0 (that is, we deterministically select the move with maximum visit count, to
+    give the strongest possible play). If the new player wins by a margin of > 55% (to
+    avoid selecting on noise alone) then it becomes the best player αθ∗, and is subsequently
+    used for self-play generation, and also becomes the baseline for subsequent
+    comparisons.
 
+    """
     def __init__(self,
                  game_size: int,
                  model1: AZNeuralNetwork,
@@ -40,13 +53,11 @@ class Arena:
         game = DotsAndBoxesGame(self.game_size)
 
         while game.is_running():
-            lines = game.lines_vector
-            valid_moves = game.get_valid_moves()
-            move = self.model1.determine_move(lines, valid_moves) if game.player_at_turn == 1 \
-                else self.model2.determine_move(lines, valid_moves)
+            lines = game.get_canonical_lines_vector()
+            move = self.model1.determine_move(lines) if game.current_player == 1 else self.model2.determine_move(lines)
 
-            assert move in valid_moves, \
-                print(f"<{move}> is not a valid move. Model should have selected a move in {valid_moves}.")
+            assert move in game.get_valid_moves(), \
+                print(f"<{move}> is not a valid move. Model should have selected a move in {game.get_valid_moves()}.")
 
             game.execute_move(move)
 
