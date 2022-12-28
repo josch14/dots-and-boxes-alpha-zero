@@ -1,7 +1,6 @@
 import copy
 import math
 from random import randint
-
 import numpy as np
 
 # local import
@@ -12,7 +11,7 @@ from lib.node import AZNode
 
 class MCTS:
     """
-    In each position s, an MCTS is executed, guided by the neural network.
+    An MCTS is executed, guided by the neural network, in each position s during self-play to determine the next move.
 
     Attributes
     ----------
@@ -26,11 +25,7 @@ class MCTS:
         constant determining level of exploration (PUCT algorithm in select)
     """
 
-    def __init__(self,
-                 model: AZNeuralNetwork,
-                 s: DotsAndBoxesGame,
-                 n_simulations: int,
-                 c_puct: float) -> None:
+    def __init__(self, model: AZNeuralNetwork, s: DotsAndBoxesGame, n_simulations: int, c_puct: float):
 
         self.model = model
         self.root = AZNode(
@@ -44,8 +39,7 @@ class MCTS:
     def play(self, temp: int) -> [float]:
         """
         (d) Play.
-        Provides the core functionality of MCTS: output search probabilities
-        recommending moves to play.
+        Provides the core functionality of MCTS: output search probabilities recommending moves to play.
 
         Parameters
         ----------
@@ -62,31 +56,29 @@ class MCTS:
         for i in range(self.n_simulations):
             self.search(self.root)
 
-        s = self.root.s  # position s of root node
+        s = self.root.s  # position s of root node (more accurate: the game state that contains position s)
 
         # only valid moves may have a visit
         assert set(list(self.root.N.keys())).issubset(set(s.get_valid_moves()))
 
         # probability vector that is returned should contain value for each line
         # when line is already drawn, probability should be 0
-        counts = [self.root.N[a] if a in self.root.N else 0 for a in
-                  range(s.N_LINES)]
+        counts = [self.root.N[a] if a in self.root.N else 0 for a in range(s.N_LINES)]
 
         if temp == 0:
-            # select the move with maximum visit count to give the strongest
-            # possible play (return value is one-hot vector)
+            # select the move with maximum visit count to give the strongest possible play (return value is one-hot vector)
             probs = [0] * len(counts)
             probs[np.array(counts).argmax()] = 1
             return probs
 
-        # pi(a) ~ N(s,a)^(1/temp), while ensuring a probability distribution
+        # pi(a) ~ N(s,a)^(1/temp) while ensuring a probability distribution
         probs = [n ** (1. / temp) for n in counts]
         probs = [p / float(sum(probs)) for p in probs]
         return probs
 
     def search(self, node: AZNode) -> float:
         """
-        Perform a single simulation within the MCTS.
+        Perform a single simulation within MCTS.
 
         Parameters
         ----------
@@ -99,11 +91,11 @@ class MCTS:
             probability of the current player winning in position s
         """
 
-        # game is finished before reaching a non-visited node
         if not node.s.is_running():
+            # game is finished before reaching a non-visited node
             # return the actual score v for the current player
             # in case of a winner, current_player contains it (when capturing
-            # a box, the player at turn does not switch)
+            # a box, the current player does not switch)
             result = node.s.result
 
             if node.s.current_player == result:
@@ -114,26 +106,26 @@ class MCTS:
                 v = -1
             return v
 
-        # reached a leaf node, i.e., a node which is visited for the first time
+        # reached a leaf (node which was not visited yet)
         if node.P is None:
             v = self.evaluate(node)
             return v
 
-        # node visited before: continue traversing the tree
+        # node was visited before: continue traversing the tree
         a = self.select(node)
 
         if a not in node.N:
-            # applying the selected move means approaching a leaf
+            # applying the selected move means approaching a leaf (node which was not visited yet)
             child = self.expand(node, a)
         else:
             child = node.get_child_by_move(a)
 
-        # continue traversing, i.e. call method recursively
+        # continue traversing, i.e., call method recursively
         v_child = self.search(child)
 
-        # we now received a score v from the child node, either
-        # by reaching a leaf (v in [0,1] as calculated by the neural network) or
-        # by finishing the game (v in {-1, 0, 1})
+        # we now received a score v from the child node, either by ..
+        # .. reaching a leaf (v in [-1,1] as calculated by the neural network) or by
+        # .. finishing the game (v in {-1, 0, 1})
         v = v_child if node.s.current_player == child.s.current_player else -v_child
 
         # backup before returning v
@@ -144,8 +136,8 @@ class MCTS:
     def select(self, node: AZNode) -> int:
         """
         (a) Select.
-        Select the move with maximum action value Q, plus an upper confidence
-        bound U that depends on a stored prior probability P and visit count N.
+        Select the move with maximum action value Q, plus an upper confidence bound U that depends on a stored
+        prior probability P and visit count N.
 
         Parameters
         ----------
@@ -162,7 +154,7 @@ class MCTS:
         maximum = float('-inf')
         a_max = -1
 
-        N_sum = sum(node.N.values())  # TODO only valid moves relevant here?
+        N_sum = sum(node.N.values())
         N_sqrt = math.sqrt(N_sum)
 
         for a in node.s.get_valid_moves():
@@ -178,7 +170,6 @@ class MCTS:
                 N = 0
 
             # upper confidence bound U(s, a) ~ P(s, a) / (1 + N(s, a))
-            # U = P / (1 + N) # simple version
             U = self.c_puct * P * N_sqrt / (1 + N)
 
             # maximize action value Q(s,a) + upper confidence bound U(s,a)
@@ -192,8 +183,7 @@ class MCTS:
     def expand(node: AZNode, a: int):
         """
         (b) Expand (and Evaluate).
-        For the input node, create the child node (i.e., we are approaching
-        a leaf) that is reached when executing move a.
+        For the input node, create the child node (i.e., we are approaching a leaf) that is reached when executing move a.
 
         Parameters
         ----------
@@ -233,20 +223,21 @@ class MCTS:
             probability of the current player winning in position s
         """
 
-        # neural network evaluation is carried out a reflection or rotation selected uniformly at random from i in [1..8]
+        # neural network evaluation is carried out on a reflection or rotation which is selected uniformly
         i = randint(0, 7)
-        lines_vector = DotsAndBoxesGame.get_rotations_and_reflections(leaf.s.get_canonical_lines_vector())[i]
+        # rules are invariant to colour transposition: represent the board from the perspective of the current player
+        s = leaf.s.get_canonical_s()
+        s = DotsAndBoxesGame.get_rotations_and_reflections(s)[i]
 
-        p, v = self.model.p_v(s=lines_vector)
+        p, v = self.model.p_v(s)
         leaf.P = p
         return v
 
     @staticmethod
-    def backup(node: AZNode, a: int, v: float) -> None:
+    def backup(node: AZNode, a: int, v: float):
         """
         (c) Backup.
-        Update action value Q to track the mean of all evaluations v in the
-        subtree below that node, and the visit count N.
+        Update action value Q to track the mean of all evaluations v in the subtree below that node, and visit count N.
 
         Parameters
         ----------

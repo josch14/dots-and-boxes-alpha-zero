@@ -16,5 +16,6 @@ conda install -c conda-forge termcolor=1.1.0
 conda install -c anaconda colorama
 
 # pytorch
-conda install pytorch torchvision torchaudio cpuonly -c pytorch
+conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cpuonly -c pytorch  # cpu only
+conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=10.2 -c pytorch  # gpu support
 ```

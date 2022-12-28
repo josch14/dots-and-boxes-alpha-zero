@@ -5,38 +5,49 @@ import numpy as np
 
 
 class DotsAndBoxesGame:
+    """
+    Implementation of the Dots and Boxes game, including relevant parameters for representing the game state
+    and the logic for playing the game.
 
-    def __init__(self, size: int):
-        """
-        size: int
-            - size of the board; size of n means that there are a total of 
-            n*n boxes for the players to capture by drawing the lines
-            - example: n=2 -> 4 boxes -> 2*n*(n+1) = 2*2*3 = 12 possible lines
-            - the board with the corresponding line numbers then look as follows
-            (i.e. first horizontal lines are numbered, then the vertical lines)
-            +   0  +   1  +
+    Attributes
+    ----------
+    SIZE : int
+        board size (in number of boxes per row and column)
+    current_player : int
+        player which is playing the next move. It can be determined manually or randomly which player should have the
+        first turn of the game
+        values: {-1, 1} = {player 2, player 1}
+    result : int
+        game result
+        values: {None, -1, 0, 1} = {game is running, win player 2, draw, win player 1}
+    N_LINES : int
+        total number of lines that can be drawn as a result of the board size
+    s : np.ndarray
+        position vector s (i.e., the board representation) of length N_LINES. Each element corresponds to one line on
+        the board
+        element values: {-1, 0, 1} = {line drawn by player 2, line is free, line drawn by player 1}
+        the line indices correspond with the lines of a Dots and Boxes game in the following manner (i.e., first the
+        horizontal lines are numbered, then the vertical lines):
+        +  0 +  1 +
+        6    8   10
+        +  2 +  3 +
+        7    9   11
+        +  4 +  5 +
+    N_BOXES : int
+        total number of boxes that can be captured as a result of the board size
+    boxes : np.ndarray
+        tracks which boxes were captured by which player
+        element values: {-1, 0, 1} = {box captured by player 2, box not captured yet, box captured by player 1}
+    """
+    def __init__(self, size: int, starting_player: int = None):
 
-             6      8     10
-
-            +   2  +   3  +
-
-             7      9     11
-
-            +   4  +   5  +
-        """
-
-        # values used for lines_vector, current_player and game_winner:
-        # x = 1 <-> Player 1
-        # x = 0 <-> None of both
-        # x = -1 <-> Player 2
-        self.result = None
-        self.current_player = 1 if randint(0, 1) == 1 else -1  # player with first turn
         self.SIZE = size
-        self.N_LINES = 2 * size * (size + 1)
+        self.current_player = (1 if randint(0, 1) == 1 else -1) if starting_player is None else starting_player
+        self.result = None
 
-        # lines (board values)
-        self.n_lines_drawn = 0
-        self.lines_vector = np.zeros((self.N_LINES,), dtype=np.float32)  # torch uses float32
+        # board representation in position vector s
+        self.N_LINES = 2 * size * (size + 1)
+        self.s = np.zeros((self.N_LINES,), dtype=np.float32)  # torch uses float32
 
         # boxes which can be captured by drawing lines
         self.N_BOXES = size * size
@@ -53,85 +64,76 @@ class DotsAndBoxesGame:
                 not self.result == obj.result or \
                 not self.SIZE == obj.SIZE or \
                 not self.N_LINES == obj.N_LINES or \
-                not self.n_lines_drawn == obj.n_lines_drawn or \
-                not np.array_equal(self.lines_vector, obj.lines_vector) or \
+                not np.array_equal(self.s, obj.s) or \
                 not self.N_BOXES == obj.N_BOXES or \
                 not np.array_equal(self.boxes, obj.boxes):
             return False
-
         return True
+
 
     """
     Class setters.
     """
+    def draw_line(self, line: int):
+        assert self.s[line] == 0, "line is already drawn"
+        self.s[line] = self.current_player
 
-    def draw_line(self, line: int, value: int) -> None:
-        assert 0 <= line < self.N_LINES, "Invalid line number."
-        assert value in [-1, 1], f"Invalid line value ({line} not in {[-1, 1]})."
-        assert self.lines_vector[line] == 0, "Invalid line value (line should not be drawn yet)."
-        self.lines_vector[line] = value
-
-    def switch_current_player(self) -> None:
+    def switch_current_player(self):
         self.current_player *= -1
 
-    def capture_box(self, row: int, col: int, value: int) -> None:
-        assert value in [-1, 1], \
-            "Box needs to be captured by a Player."
-        self.boxes[row][col] = value
+    def capture_box(self, row: int, col: int):
+        assert self.boxes[row][col] == 0, "box is already captured"
+        self.boxes[row][col] = self.current_player
+
 
     """
     Game Logic.
     """
-    def execute_move(self, line: int) -> None:
+    def execute_move(self, line: int):
 
         # execute move means drawing the line
-        self.draw_line(line, self.current_player)
-        self.n_lines_drawn += 1
+        self.draw_line(line)
 
         # check whether a new box was captured
         # this is the case when the line belongs to a box (maximum of two boxes) which now has 4 drawn lines
-
         box_captured = False
-        # step 1: get the box or boxes (i.e., the indices) to which the line belongs
         for box in self.get_boxes_of_line(line):
             lines = self.get_lines_of_box(box)
 
-            # step 2: check whether such box (now) has 4 lines -> box captures
-            if len([self.lines_vector[l] for l in lines if self.lines_vector[l] != 0]) == 4:
+            if len([self.s[line] for line in lines if self.s[line] != 0]) == 4:
                 self.capture_box(
                     row=box[0],
-                    col=box[1],
-                    value=self.current_player
+                    col=box[1]
                 )
                 box_captured = True
 
-        # when the player captured a box by drawing a line, it's the player's turn again
+        # switch current player when the player did not capture a box by drawing the line
         if not box_captured:
             self.switch_current_player()
         else:
-            # check whether the game is finished now
             self.check_finished()
 
-    def check_finished(self) -> None:
-        assert self.result is None, "when check_finished() is called, self.result should be None"
+    def check_finished(self):
+        assert self.result is None, "result is already set"
 
         # player reached necessary number of captured boxes to win the game
         boxes_to_win = math.floor(self.N_BOXES / 2) + 1
 
         if ((self.boxes == 1).sum()) >= boxes_to_win:
-            self.result = 1  # win: player 1
+            self.result = 1
 
-        elif ((self.boxes == 2).sum()) >= boxes_to_win:
-            self.result = -1  # win: player 2
+        elif ((self.boxes == -1).sum()) >= boxes_to_win:
+            self.result = -1
 
-        elif self.n_lines_drawn == self.N_LINES:
-            self.result = 0  # draw (no lines left to draw)
+        elif np.count_nonzero(self.s == 0) == 0:  # no free lines left
+            self.result = 0  # draw
 
     def is_running(self) -> bool:
         return self.result is None
 
     def get_valid_moves(self) -> List[int]:
-        return np.where(self.lines_vector == 0)[0].tolist()
+        return np.where(self.s == 0)[0].tolist()
+
 
     """
     Important methods to get line and box information.
@@ -177,13 +179,25 @@ class DotsAndBoxesGame:
 
         return [line_top, line_bottom, line_left, line_right]
 
-    def get_canonical_lines_vector(self) -> np.ndarray:
-        return self.current_player * self.lines_vector
+
+    """
+    Import methods for self-play using MCTS and the neural network that is to be trained.
+    """
+    def get_canonical_s(self) -> np.ndarray:
+        """
+        The neural network expects the position vector s from the POV of the current player (=1).
+        """
+        return self.current_player * self.s
 
     @staticmethod
-    def get_rotations_and_reflections(lines_vector: np.ndarray) -> List[np.ndarray]:
+    def get_rotations_and_reflections(s: np.ndarray) -> List[np.ndarray]:
         """
-        For the position s (encoded in self.lines_vector), determine the rotations and reflections.
+        For the position s, determine the equivalent position vectors, i.e., rotations and reflections.
+
+        Parameters
+        -------
+        s : np.ndarray
+            position vector for which the equivalent position vectors should be determined
 
         Returns
         -------
@@ -192,21 +206,18 @@ class DotsAndBoxesGame:
         """
 
         # rotations
-        h, v = DotsAndBoxesGame.lines_vector_to_matrices(lines_vector)
-        rotations = [np.copy(lines_vector)]
+        h, v = DotsAndBoxesGame.s_to_h_v(s)
+        rotations = [np.copy(s)]
         for i in range(3):
             v, h = np.rot90(h), np.rot90(v)
-            s_rot = DotsAndBoxesGame.matrices_to_lines_vector(horizontals=h, verticals=v)
-            rotations.append(s_rot)
+            rotations.append(DotsAndBoxesGame.h_v_to_s(h=h, v=v))
 
         # reflections
         reflections = []
         for s in rotations:
-            h, v = DotsAndBoxesGame.lines_vector_to_matrices(s)
-            s_refl = DotsAndBoxesGame.matrices_to_lines_vector(horizontals=np.fliplr(h), verticals=np.fliplr(v))
-            reflections.append(s_refl)
+            h, v = DotsAndBoxesGame.s_to_h_v(s)
+            reflections.append(DotsAndBoxesGame.h_v_to_s(h=np.fliplr(h), v=np.fliplr(v)))
 
-        lista = rotations + reflections
         return rotations + reflections
 
     @staticmethod
@@ -214,45 +225,44 @@ class DotsAndBoxesGame:
         return int(-0.5 + math.sqrt(4 + 8 * n_lines) / 4)
 
     @staticmethod
-    def lines_vector_to_matrices(lines_vector: np.ndarray):
-        if isinstance(lines_vector, list):
-            print("hello")
-        n_lines = lines_vector.size
-        size = DotsAndBoxesGame.n_lines_to_size(lines_vector.size)
+    def s_to_h_v(s: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Convert position vector s to (h, v)-matrices representation (containing the horizontal and vertical lines).
+        Example (numbers are indices of the position vector s):
+        +  0 +  1 +
+        6    8    10            [0  1]
+        +  2 +  3 +    -->  h = [2  3]  and   v = [6  8  10]
+        7    9    11            [4  5]            [7  9  11]
+        +  4 +  5 +
+        """
 
-        horizontals = np.zeros((size + 1, size), dtype=np.float32)
-        verticals = np.zeros((size, size + 1), dtype=np.float32)
+        n_lines = s.size
+        size = DotsAndBoxesGame.n_lines_to_size(n_lines)
+
+        h = np.zeros((size + 1, size), dtype=np.float32)
+        v = np.zeros((size, size + 1), dtype=np.float32)
 
         for line in range(n_lines):
             if line < n_lines / 2:
                 # horizontal line
                 i = int(line // size)
                 j = int(line % size)
-                horizontals[i][j] = lines_vector[line]
+                h[i][j] = s[line]
 
             else:
                 # vertical line
                 j = int((line - n_lines / 2) // size)
                 i = int((line - n_lines / 2) % size)
-                verticals[i][j] = lines_vector[line]
+                v[i][j] = s[line]
 
-        return horizontals, verticals
+        return h, v
 
     @staticmethod
-    def matrices_to_lines_vector(horizontals: np.ndarray, verticals: np.ndarray):
-        n_lines = 2 * horizontals.size
-        size = int(-0.5 + math.sqrt(4 + 8 * n_lines) / 4)
-        lines_vector = np.zeros((n_lines,), dtype=np.float32)
+    def h_v_to_s(h: np.ndarray, v: np.ndarray) -> np.ndarray:
 
-        line = 0
-        for i in range(size + 1):
-            for j in range(size):
-                lines_vector[line] = horizontals[i, j]
-                line += 1
+        s = np.concatenate((
+            np.matrix.flatten(h, order='C'),  # row-major
+            np.matrix.flatten(v, order='F')   # column-major
+        ))
 
-        for j in range(size + 1):
-            for i in range(size):
-                lines_vector[line] = verticals[i, j]
-                line += 1
-
-        return lines_vector
+        return s

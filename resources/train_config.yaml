@@ -1,36 +1,36 @@
+
 game_size : 3     # board size
-iterations: 1000  # number of iterations of mcts + training + arena
+iterations: 1000  # total number of iterations of mcts + training + model comparison
 
 # MCTS parameters
 mcts_parameters:
-  n_games                   : 50
-  n_simulations             : 20
-  temperature_move_threshold: 5
-  c_puct                    : 1    # PUCT algorithm parameter, used in MCTS: select
+  n_games                   : 100   # number of games of self-play to be performed
+  n_simulations             : 100  # number of performed simulations during each MCTS
+  temperature_move_threshold: 10    # parameter regarding search space diversity
+  c_puct                    : 1.5  # PUCT algorithm parameter, used in Select during MCTS
 
 # neural network parameters
 model_parameters:
-  hidden_units  : 128
-  hidden_layers : 2
-  dropout       : 0.2
-  initialize_gain: 0.1
+  hidden_units   : 128  # number of units per hidden layer
+  hidden_layers  : 2    # number of layers between input and output layer
+  dropout        : 0.2  # dropout after each layer except output
 
 # neural network training: optimizer parameters
 optimizer_parameters:
-  learning_rate: 0.1
-  momentum     : 0.9
+  learning_rate: 0.01  # learning rate for SGD
+  momentum     : 0.9   # momentum factor for SGD
+  weight_decay : 0.1   # L2 weight regularization
 
 # neural network training: training parameters
 training_parameters:
-  dataset_size: 50000  # includes rotations and reflections
-  epochs      : 100000
-  batch_size  : 32
-  patience    : 100
+  dataset_size: 500000  # number of training examples (includes rotations and reflections)
+  epochs      : 100000  # maximum number of training epochs
+  batch_size  : 32      # batch size
+  patience    : 50      # number of epochs until early stopping
 
-# arena (model comparison) parameters
-arena_parameters:
-  n_games     : 1000
-  win_fraction: 0.55
-
+# evaluator (model comparison) parameters
+evaluator_parameters:
+  n_games     : 1000  # number of games the models play against each other
+  win_fraction: 0.55  # fraction of games the trained model has to be considered as improved
 
 
