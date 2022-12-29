@@ -4,16 +4,16 @@ iterations: 1000  # total number of iterations of mcts + training + model compar
 
 # MCTS parameters
 mcts_parameters:
-  n_games                   : 100   # number of games of self-play to be performed
+  n_games                   : 10   # number of games of self-play to be performed
   n_simulations             : 100  # number of performed simulations during each MCTS
   temperature_move_threshold: 10    # parameter regarding search space diversity
   c_puct                    : 1.5  # PUCT algorithm parameter, used in Select during MCTS
 
 # neural network parameters
 model_parameters:
-  hidden_units   : 128  # number of units per hidden layer
-  hidden_layers  : 2    # number of layers between input and output layer
-  dropout        : 0.2  # dropout after each layer except output
+  hidden_units   : 1028  # number of units per hidden layer
+  hidden_layers  : 3    # number of layers between input and output layer
+  dropout        : 0.1  # dropout after each layer except output
 
 # neural network training: optimizer parameters
 optimizer_parameters:
@@ -31,6 +31,6 @@ training_parameters:
 # evaluator (model comparison) parameters
 evaluator_parameters:
   n_games     : 1000  # number of games the models play against each other
-  win_fraction: 0.55  # fraction of games the trained model has to be considered as improved
+  win_fraction: 0.53  # fraction of games the trained model has to be considered as improved
 
 

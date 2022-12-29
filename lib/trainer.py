@@ -1,3 +1,4 @@
+import time
 from random import shuffle
 import numpy as np
 import torch
@@ -51,16 +52,21 @@ class Trainer:
         self.training_parameters = config["training_parameters"]
         self.evaluator_parameters = config["evaluator_parameters"]
 
-        # initialize model
+        # utilize gpu if possible
+        self.inference_device = "cpu"
+        self.training_device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        print(f"Model inference (during MCTS) is performed with device: {self.inference_device}")
+        print(f"Model training is performed with device: {self.training_device}")
+
+        # initialize model (potentially from checkpoint)
         self.model = AZNeuralNetwork(
             game_size=self.game_size,
-            model_parameters=self.model_parameters
+            model_parameters=self.model_parameters,
+            inference_device=self.inference_device
         )
         self.model_name = model_name
         if model_name:
             self.model.load_checkpoint(model_name)
-        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")  # utilize gpu if possible
-        self.model.to(self.device)
 
         self.train_examples = []
 
@@ -280,9 +286,9 @@ class Trainer:
 
         s_batched, p_batched, v_batched = [], [], []
         for i in range(0, len(train_examples), batch_size):
-            s_batched.append(torch.tensor(np.vstack(s_train[i:i + batch_size]), dtype=torch.float32, device=self.device))
-            p_batched.append(torch.tensor(np.vstack(p_train[i:i + batch_size]), dtype=torch.float32, device=self.device))
-            v_batched.append(torch.tensor(v_train[i:i + batch_size], dtype=torch.float32, device=self.device))  # scalar v
+            s_batched.append(torch.tensor(np.vstack(s_train[i:i + batch_size]), dtype=torch.float32, device=self.training_device))
+            p_batched.append(torch.tensor(np.vstack(p_train[i:i + batch_size]), dtype=torch.float32, device=self.training_device))
+            v_batched.append(torch.tensor(v_train[i:i + batch_size], dtype=torch.float32, device=self.training_device))  # scalar v
         n_batches = len(s_batched)
 
         current_patience = 0
@@ -292,10 +298,15 @@ class Trainer:
         CrossEntropyLoss = torch.nn.CrossEntropyLoss()
         MSELoss = torch.nn.MSELoss()
 
+        self.model.to(self.training_device)
+
         for epoch in range(1, epochs + 1):
+
             if current_patience > patience:
                 print(f"Early stopping (patience={patience}) after {epoch} epochs.")
                 break
+
+            start_time = time.time()
 
             # train model
             self.model.train()
@@ -323,8 +334,10 @@ class Trainer:
                     best_loss = loss
                     best_model = deepcopy(self.model)
                     current_patience = 0
-                    print("New best model achieved after {0:d} epochs (loss: {1:.5f}).".format(epoch, best_loss.item()))
+                    print("New best model achieved after {0:d} epochs (loss: {1:.5f}). "
+                          "Execution Time for epoch: {2:.2f}s".format(epoch, best_loss, time.time() - start_time))
                 else:
                     current_patience += 1
 
         self.model = best_model
+        self.model.to("cpu")

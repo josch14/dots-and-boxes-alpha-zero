@@ -17,8 +17,10 @@ class AZNeuralNetwork(nn.Module):
     simple fully connected layers. Furthermore, the model is initialized to random weights.
     """
 
-    def __init__(self, game_size: int, model_parameters: dict):
+    def __init__(self, game_size: int, model_parameters: dict, inference_device: torch.device):
         super(AZNeuralNetwork, self).__init__()
+
+        self.inference_device = inference_device
 
         self.game_size = game_size
         self.io_units = 2 * self.game_size * (self.game_size + 1)  # = n_lines
@@ -119,7 +121,7 @@ class AZNeuralNetwork(nn.Module):
         assert len(valid_moves) > 0, "No valid move left, model should not be called in this case"
 
         # model expects ...
-        s = torch.from_numpy(s)  # ... tensor
+        s = torch.from_numpy(s).to(self.inference_device)  # ... tensor
         s = s.unsqueeze(0)  # ... batch due to batch normalization
 
         # cpu only necessary when gpu is used
@@ -177,6 +179,6 @@ class AZNeuralNetwork(nn.Module):
             self.load_state_dict(torch.load(path))
             print(f"Loading model from {path} was successful.")
         else:
-            print(f"Couldn't Load model from {path}: path does not exist (yet)")
+            print(f"Couldn't load model from {path}: path does not exist (yet)")
 
 
