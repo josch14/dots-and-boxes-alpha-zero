@@ -71,6 +71,7 @@ class Trainer:
         self.model_name = model_name
         if model_name:
             self.model.load_checkpoint(model_name)
+        self.model.to(self.inference_device)
 
         self.train_examples = []
 
