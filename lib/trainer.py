@@ -36,12 +36,14 @@ class Trainer:
         neural network that is to be trained
     model_name : str
         name of the neural network that is to be trained (if existing, the checkpoint may be loaded from local files)
-    device : torch.cuda.device
-        device on which the neural network training is performed
+    inference_device : torch.cuda.device
+        device with which model interference is performed during MCTS
+    training_device : torch.cuda.device
+        device with which model training is performed
     train_examples : List[[np.ndarray, [float], float]]
         list of training examples (s, p, v) (from the current player's POV)
     """
-    def __init__(self, config: dict, model_name: str):
+    def __init__(self, config: dict, model_name: str, inference_device: str, training_device: str):
 
         self.game_size = config["game_size"]
         self.iterations = config["iterations"]
@@ -53,8 +55,10 @@ class Trainer:
         self.evaluator_parameters = config["evaluator_parameters"]
 
         # utilize gpu if possible
-        self.inference_device = "cpu"
-        self.training_device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        if "cuda" in [inference_device, training_device]:
+            assert torch.cuda.is_available()
+        self.inference_device = torch.device(inference_device)
+        self.training_device = torch.device(training_device)
         print(f"Model inference (during MCTS) is performed with device: {self.inference_device}")
         print(f"Model training is performed with device: {self.training_device}")
 
