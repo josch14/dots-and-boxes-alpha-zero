@@ -345,4 +345,4 @@ class Trainer:
                     current_patience += 1
 
         self.model = best_model
-        self.model.to("cpu")
+        self.model.to(self.inference_device)
