@@ -12,6 +12,8 @@ from lib.evaluator import Evaluator
 from lib.game import DotsAndBoxesGame
 from lib.mcts import MCTS
 from lib.model import AZNeuralNetwork
+from players.neural_network import NeuralNetworkPlayer
+from players.random import RandomPlayer
 
 
 class Trainer:
@@ -41,8 +43,9 @@ class Trainer:
         device with which model interference is performed during MCTS
     training_device : torch.cuda.device
         device with which model training is performed
-    train_examples : List[[np.ndarray, [float], float]]
-        list of training examples (s, p, v) (from the current player's POV)
+    train_examples_per_game : List[List[[np.ndarray, [float], float]]]
+        list (one element corresponds with single self-play), containing lists of training examples (s, p, v)-tuples (from
+        the current player's POV)
     """
     def __init__(self, config: dict, model_name: str, n_workers: int, inference_device: str, training_device: str):
 
@@ -73,7 +76,7 @@ class Trainer:
             self.model.load_checkpoint(model_name)
         self.model.to(self.inference_device)
 
-        self.train_examples = []
+        self.train_examples_per_game = []
 
     def loop(self, n_iterations: int):
         """
@@ -85,9 +88,6 @@ class Trainer:
             number of iterations to perform
         """
 
-        # training parameters
-        dataset_size = self.training_parameters["dataset_size"]
-
         # evaluator parameters
         win_fraction = self.evaluator_parameters["win_fraction"]
         n_games = self.evaluator_parameters["n_games"]
@@ -98,34 +98,19 @@ class Trainer:
 
             # 1) perform games of self-play to obtain training data
             print("------------ Self-play using MCTS ------------")
-            start_time = time.time()
-            train_examples = self.perform_self_plays(
+            self.train_examples_per_game.extend(self.perform_self_plays(
                 n_games=self.mcts_parameters["n_games"],
                 n_simulations=self.mcts_parameters["n_simulations"],
                 temperature_move_threshold=self.mcts_parameters["temperature_move_threshold"],
                 c_puct=self.mcts_parameters["c_puct"]
-            )
-
-            # rules are invariant under rotation and reflection:
-            # augment dataset to include rotations and reflections of each position
-            augmented_train_examples = []
-            for s, p, v in train_examples:
-                augmented_train_examples.extend(
-                    [(s_augmented, p, v) for s_augmented in DotsAndBoxesGame.get_rotations_and_reflections(s)]
-                )
-            print("Self-play resulted in {0:d} new training examples (after augmentation). "
-                  "Execution time: {1:.2f}s".format(len(augmented_train_examples), time.time() - start_time))
-
-
-            self.train_examples.extend(augmented_train_examples)
+            ))
             # cut dataset to desired size
-            while len(self.train_examples) > dataset_size:
-                self.train_examples.pop(0)
+            while len(self.train_examples_per_game) > self.training_parameters["game_buffer_size"]:
+                self.train_examples_per_game.pop(0)
 
 
             # 2) model learning
             print("\n---------- Neural Network Training -----------")
-            print(f"Dataset currently consist of {len(self.train_examples)}/{dataset_size} training examples.")
             prev_model = deepcopy(self.model)
             self.perform_model_training()
 
@@ -134,18 +119,26 @@ class Trainer:
             # if the trained network wins by a margin of > win_fraction, then it is subsequently used for self-play
             # generation, and also becomes the baseline for subsequent comparisons
             print("\n-------------- Model Comparison --------------")
+
+            # 3.1) compare against random player
             evaluator = Evaluator(
                 game_size=self.game_size,
-                model1=self.model,
-                model2=prev_model,
+                player1=NeuralNetworkPlayer(self.model, name=f"TrainedModel(Iteration={iteration})"),
+                player2=RandomPlayer(),
                 n_games=n_games
             )
-            wins_trained_model, wins_prev_model, draws = evaluator.compare()
-            win_percent = wins_trained_model / n_games
+            evaluator.compare()
 
-            print(f"Results: TrainedModel(Iteration={iteration}):Draw:PreviousModel(Iteration={iteration_of_best_model}) - {wins_trained_model}:{draws}:{wins_prev_model}")
-            print(f"Trained model won {round(win_percent * 100, 2)}% of the games ({round(win_fraction * 100, 2)}% needed).")
+            # 3.2) compare against previous model
+            evaluator = Evaluator(
+                game_size=self.game_size,
+                player1=NeuralNetworkPlayer(self.model, name=f"TrainedModel(Iteration={iteration})"),
+                player2=NeuralNetworkPlayer(prev_model, name=f"PreviousModel(Iteration={iteration_of_best_model})"),
+                n_games=n_games
+            )
+            _, _, _, win_percent = evaluator.compare()
 
+            print(f"Trained model won {round(win_percent * 100, 2)}% of the games vs. previous model ({round(win_fraction * 100, 2)}% needed).")
             if win_percent >= win_fraction:
                 iteration_of_best_model = iteration
                 print("Continuing with trained model!")
@@ -154,6 +147,7 @@ class Trainer:
             else:
                 print(f"Continuing with previous best model from iteration {iteration_of_best_model}!")
                 self.model = prev_model
+
             print("###########################################################")
 
 
@@ -177,14 +171,19 @@ class Trainer:
         train_examples : List[[np.ndarray, [float], float]]
             list of training examples (s, p, v) (from the current player's POV)
         """
-        train_examples = []
+        train_examples_per_game = []
         self.model.eval()
 
         args_repeat = [(n_simulations, temperature_move_threshold, c_puct)] * n_games
+        start_time = time.time()
         with Pool(processes=self.n_workers) as pool:
-            for train_example in pool.starmap(self.perform_self_play, tqdm(args_repeat, file=stdout)):
-                train_examples.extend(train_example),
-        return train_examples
+            for train_examples in pool.starmap(self.perform_self_play, tqdm(args_repeat, file=stdout)):
+                train_examples_per_game.append(train_examples),
+
+        print("{0:d} games of Self-play resulted in {1:d} new training examples (without augmentations; after {2:.2f}s).".format(
+            n_games, len([t for l in train_examples_per_game for t in l]), time.time() - start_time))
+
+        return train_examples_per_game
 
 
     def perform_self_play(self,
@@ -291,11 +290,19 @@ class Trainer:
         )
 
         # prepare data
-        # use copy of training examples to preserve order of data
-        train_examples = deepcopy(self.train_examples)
+        # augment dataset by including rotations and reflections of each position
+        train_examples = []
+        for train_examples_list in self.train_examples_per_game:
+            for s, p, v in train_examples_list:
+                train_examples.extend(
+                    [(s_augmented, p, v) for s_augmented in DotsAndBoxesGame.get_rotations_and_reflections(s)]
+                )
+        game_buffer_size = self.training_parameters["game_buffer_size"]
+        print(f"The dataset consist of {len(train_examples)} training examples (including augmentations) from the "
+              f"{len(self.train_examples_per_game)}/{game_buffer_size} most recent games.")
+
         shuffle(train_examples)
         s_train, p_train, v_train = [list(t) for t in zip(*train_examples)]
-
         s_batched, p_batched, v_batched = [], [], []
         for i in range(0, len(train_examples), batch_size):
             s_batched.append(torch.tensor(np.vstack(s_train[i:i + batch_size]), dtype=torch.float32, device=self.training_device))
@@ -315,7 +322,7 @@ class Trainer:
         for epoch in range(1, epochs + 1):
 
             if current_patience > patience:
-                print(f"Early stopping (patience={patience}) after {epoch} epochs.")
+                print(f"Early stopping after {epoch} epochs.")
                 break
 
             start_time = time.time()
@@ -342,7 +349,7 @@ class Trainer:
                     loss += CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
                 loss = loss / n_batches
 
-                print("Epoch {0:d}: Achieved loss of {1:.5f} after {2:.2f}s execution time".format(epoch, loss, time.time() - start_time))
+                print("[Epoch {0:d}] Loss: {1:.5f} (after {2:.2f}s). ".format(epoch, loss, time.time() - start_time), end="")
 
                 if loss < best_loss:
                     best_loss = loss
@@ -351,6 +358,7 @@ class Trainer:
                     print("New best model achieved!")
                 else:
                     current_patience += 1
+                    print("")
 
         self.model = best_model
         self.model.to(self.inference_device)

@@ -24,39 +24,30 @@ class AZNeuralNetwork(nn.Module):
 
         self.game_size = game_size
         self.io_units = 2 * self.game_size * (self.game_size + 1)  # = n_lines
-        self.hidden_units = model_parameters["hidden_units"]
         self.hidden_layers = model_parameters["hidden_layers"]
         self.dropout = model_parameters["dropout"]
 
-        # input layer
-        linear_in = nn.Linear(self.io_units, self.hidden_units)
-        nn.init.xavier_normal_(linear_in.weight)  # weight init
-        linear_in.bias.data.fill_(0.01)  # bias init
-        self.fully_connected_in = nn.Sequential(
-            linear_in,
-            nn.ReLU(),
-            nn.BatchNorm1d(self.hidden_units),
-            nn.Dropout(self.dropout)
-        )
-
         # hidden layers
         self.fully_connected_layers = []
-        for i in range(self.hidden_layers - 1):
-            linear = nn.Linear(self.hidden_units, self.hidden_units)
+        for i in range(len(self.hidden_layers)):
+            linear = nn.Linear(
+                in_features=(self.io_units if i == 0 else self.hidden_layers[i-1]),
+                out_features=self.hidden_layers[i]
+            )
             nn.init.xavier_normal_(linear.weight)  # weight init
             linear.bias.data.fill_(0.01)  # bias init
             self.fully_connected_layers.append(
                 nn.Sequential(
                     linear,
                     nn.ReLU(),
-                    nn.BatchNorm1d(self.hidden_units),
+                    nn.BatchNorm1d(self.hidden_layers[i]),
                     nn.Dropout(self.dropout)
                 )
             )
         self.fully_connected_layers = nn.ModuleList(self.fully_connected_layers)
 
         # output layers
-        linear_p_out = nn.Linear(self.hidden_units, self.io_units)
+        linear_p_out = nn.Linear(self.hidden_layers[-1], self.io_units)
         nn.init.xavier_normal_(linear_p_out.weight)  # weight init
         linear_p_out.bias.data.fill_(0.01)  # bias init
         self.p_out = nn.Sequential(
@@ -64,7 +55,7 @@ class AZNeuralNetwork(nn.Module):
             nn.Softmax(dim=1),
         )
 
-        linear_v_out = nn.Linear(self.hidden_units, 1)
+        linear_v_out = nn.Linear(self.hidden_layers[-1], 1)
         nn.init.xavier_normal_(linear_v_out.weight)  # weight init
         linear_v_out.bias.data.fill_(0.01)  # bias init
         self.v_out = nn.Sequential(
@@ -91,8 +82,6 @@ class AZNeuralNetwork(nn.Module):
         p, v : [torch.tensor, torch.tensor]
             policy vector p (potentially containing values > 0 for invalid moves), value v
         """
-        s = self.fully_connected_in(s)
-
         for layer in self.fully_connected_layers:
             s = layer(s)
 
