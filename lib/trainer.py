@@ -25,14 +25,14 @@ class Trainer:
     ----------
     game_size : int
         board size (width & height) of a Dots and Boxes game
-    iterations : int
-        number of iterations of self-play + model training + model evaluation
     mcts_parameters : dict
         hyperparameters concerning the MCTS
     model_parameters, optimizer_parameters, training_parameters : dict, dict, dict
         hyperparameters concerning the neural network (architecture, training, optimizer)
     evaluator_parameters : dict
         hyperparameters concerning the evaluator
+    n_workers : int
+        number of threads during self-play. Each thread performs games of self-play
     model : AZNeuralNetwork
         neural network that is to be trained
     model_name : str
@@ -44,17 +44,16 @@ class Trainer:
     train_examples : List[[np.ndarray, [float], float]]
         list of training examples (s, p, v) (from the current player's POV)
     """
-    def __init__(self, config: dict, model_name: str, inference_device: str, training_device: str):
+    def __init__(self, config: dict, model_name: str, n_workers: int, inference_device: str, training_device: str):
 
         self.game_size = config["game_size"]
-        self.iterations = config["iterations"]
-
         self.mcts_parameters = config["mcts_parameters"]
         self.model_parameters = config["model_parameters"]
         self.optimizer_parameters = config["optimizer_parameters"]
         self.training_parameters = config["training_parameters"]
         self.evaluator_parameters = config["evaluator_parameters"]
 
+        self.n_workers = n_workers
         # utilize gpu if possible
         if "cuda" in [inference_device, training_device]:
             assert torch.cuda.is_available()
@@ -76,10 +75,16 @@ class Trainer:
 
         self.train_examples = []
 
-    def loop(self):
+    def loop(self, n_iterations: int):
         """
-        Perform a single iteration of self-play + model learning + model comparison.
+        Perform iterations of self-play + model training + model evaluation.
+
+        Parameters
+        ----------
+        n_iterations : int
+            number of iterations to perform
         """
+
         # training parameters
         dataset_size = self.training_parameters["dataset_size"]
 
@@ -88,17 +93,19 @@ class Trainer:
         n_games = self.evaluator_parameters["n_games"]
 
         iteration_of_best_model = 0
-        for iteration in range(1, self.iterations + 1):
-            print(f"\n#################### Iteration {iteration}/{self.iterations} #################### ")
+        for iteration in range(1, n_iterations + 1):
+            print(f"\n#################### Iteration {iteration}/{n_iterations} #################### ")
 
             # 1) perform games of self-play to obtain training data
             print("------------ Self-play using MCTS ------------")
+            start_time = time.time()
             train_examples = self.perform_self_plays(
                 n_games=self.mcts_parameters["n_games"],
                 n_simulations=self.mcts_parameters["n_simulations"],
                 temperature_move_threshold=self.mcts_parameters["temperature_move_threshold"],
                 c_puct=self.mcts_parameters["c_puct"]
             )
+
             # rules are invariant under rotation and reflection:
             # augment dataset to include rotations and reflections of each position
             augmented_train_examples = []
@@ -106,7 +113,9 @@ class Trainer:
                 augmented_train_examples.extend(
                     [(s_augmented, p, v) for s_augmented in DotsAndBoxesGame.get_rotations_and_reflections(s)]
                 )
-            print(f"Self-play resulted in {len(augmented_train_examples)} new training examples (after augmentation).")
+            print("Self-play resulted in {0:d} new training examples (after augmentation). "
+                  "Execution time: {1:.2f}s".format(len(augmented_train_examples), time.time() - start_time))
+
 
             self.train_examples.extend(augmented_train_examples)
             # cut dataset to desired size
@@ -172,9 +181,9 @@ class Trainer:
         self.model.eval()
 
         args_repeat = [(n_simulations, temperature_move_threshold, c_puct)] * n_games
-        with Pool(processes=4) as pool:
+        with Pool(processes=self.n_workers) as pool:
             for train_example in pool.starmap(self.perform_self_play, tqdm(args_repeat, file=stdout)):
-                train_examples.extend(train_example)
+                train_examples.extend(train_example),
         return train_examples
 
 
