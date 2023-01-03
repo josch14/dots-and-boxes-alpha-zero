@@ -170,6 +170,9 @@ class AZNeuralNetwork(nn.Module):
         return move
 
     def save_checkpoint(self, model_name: str):
+        if not os.path.exists('checkpoints/'):
+            os.makedirs('checkpoints/')
+
         path = "checkpoints/" + model_name + ".pt"
         torch.save(self.state_dict(), path)
 

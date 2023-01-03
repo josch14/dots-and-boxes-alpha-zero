@@ -12,9 +12,9 @@ python train.py -c my_model
 parser = argparse.ArgumentParser()
 parser.add_argument('-m', '--model', type=str, default="model",
                     help='Checkpoint to load (if possible) and save a trained model')
-parser.add_argument('-w', '--n_workers', type=int, default=4,
+parser.add_argument('-w', '--n_workers', type=int, default=6,
                     help='Number of threads during self-play. Each thread performs games of self-play.')
-parser.add_argument('-idev', '--inference_device', type=str, default="cuda", choices=["cpu", "cuda"],
+parser.add_argument('-idev', '--inference_device', type=str, default="cpu", choices=["cpu", "cuda"],
                     help='Device with which model interference is performed during MCTS.')
 parser.add_argument('-tdev', '--training_device', type=str, default="cuda", choices=["cpu", "cuda"],
                     help='Device with which model training is performed.')

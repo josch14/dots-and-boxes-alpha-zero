@@ -342,12 +342,13 @@ class Trainer:
                     loss += CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
                 loss = loss / n_batches
 
+                print("Epoch {0:d}: Achieved loss of {1:.5f} after {2:.2f}s execution time".format(epoch, loss, time.time() - start_time))
+
                 if loss < best_loss:
                     best_loss = loss
                     best_model = deepcopy(self.model)
                     current_patience = 0
-                    print("New best model achieved after {0:d} epochs (loss: {1:.5f}). "
-                          "Execution Time for epoch: {2:.2f}s".format(epoch, best_loss, time.time() - start_time))
+                    print("New best model achieved!")
                 else:
                     current_patience += 1
 
