@@ -1,36 +1,35 @@
-
+# general parameters
 game_size : 3     # board size
-iterations: 1000  # total number of iterations of mcts + training + model comparison
+n_iterations: 1000  # total number of iterations of mcts + training + model comparison (AlphaGo Zero: 200)
 
-# MCTS parameters
+# MCTS parameters (INFO: 3x3 Dots and Boxes offers 24 valid moves, 19x19 GO offers 362 valid moves)
 mcts_parameters:
-  n_games                   : 10   # number of games of self-play to be performed
-  n_simulations             : 100  # number of performed simulations during each MCTS
-  temperature_move_threshold: 10    # parameter regarding search space diversity
-  c_puct                    : 1.5  # PUCT algorithm parameter, used in Select during MCTS
+  n_games                   : 1000  # number of games of self-play per iteration (AlphaGo Zero: 25,000)
+  n_simulations             : 100   # number of simulations during each MCTS (AlphaGo Zero: 1,600)
+  temperature_move_threshold: 3     # parameter regarding search space diversity (AlphaGo Zero: 30)
+  c_puct                    : 1.5   # PUCT algorithm parameter, used in Select during MCTS (AlphaGo Zero: ?)
 
 # neural network parameters
 model_parameters:
-  hidden_units   : 1028  # number of units per hidden layer
-  hidden_layers  : 3    # number of layers between input and output layer
-  dropout        : 0.1  # dropout after each layer except output
+  hidden_layers: [1024, 1024, 1024, 512]  # hidden layers with corresponding number of units
+  dropout      : 0.2                      # dropout after each layer except output
 
 # neural network training: optimizer parameters
 optimizer_parameters:
-  learning_rate: 0.01  # learning rate for SGD
-  momentum     : 0.9   # momentum factor for SGD
-  weight_decay : 0.1   # L2 weight regularization
+  learning_rate: 0.001  # learning rate for SGD (AlphaGo Zero: learning rate scheduling)
+  momentum     : 0.9    # momentum factor for SGD (AlphaGo Zero: 0.9)
+  weight_decay : 0.01   # L2 weight regularization (AlphaGo Zero: 10e-4)
 
 # neural network training: training parameters
 training_parameters:
-  dataset_size: 500000  # number of training examples (includes rotations and reflections)
-  epochs      : 100000  # maximum number of training epochs
-  batch_size  : 32      # batch size
-  patience    : 50      # number of epochs until early stopping
+  game_buffer_size: 10000   # number of recent games whose samples are used for model training (AlphaGo Zero: 500,000)
+  epochs          : 100000  # maximum number of training epochs
+  batch_size      : 128      # batch size (AlphaGo Zero: 2048)
+  patience        : 10       # number of epochs until early stopping
 
 # evaluator (model comparison) parameters
 evaluator_parameters:
-  n_games     : 1000  # number of games the models play against each other
-  win_fraction: 0.53  # fraction of games the trained model has to be considered as improved
+  n_games     : 1000  # number of games the models play against each other (AlphaGo Zero: 400)
+  win_fraction: 0.53  # fraction of games the trained model has to be considered as improved (AlphaGo Zero: 0.55)
 
 
