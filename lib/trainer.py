@@ -1,4 +1,5 @@
 import time
+from multiprocessing import Pool
 from random import shuffle
 import numpy as np
 import torch
@@ -170,13 +171,10 @@ class Trainer:
         train_examples = []
         self.model.eval()
 
-        for i in tqdm(range(n_games), file=stdout):
-            # single iteration of self-play
-            train_examples.extend(self.perform_self_play(
-                n_simulations=n_simulations,
-                temperature_move_threshold=temperature_move_threshold,
-                c_puct=c_puct
-            ))
+        args_repeat = [(n_simulations, temperature_move_threshold, c_puct)] * n_games
+        with Pool(processes=4) as pool:
+            for train_example in pool.starmap(self.perform_self_play, tqdm(args_repeat, file=stdout)):
+                train_examples.extend(train_example)
         return train_examples
 
 
