@@ -12,7 +12,7 @@ class AZNeuralNetwork(nn.Module):
     - p (policy vector): vector of move probabilities p = P(a|s)
     - v (scalar value): probability of the current player winning from position s
 
-    As the position of a Dots and Boxes game is represented as a vector (and is not representable as an image), the use
+    As the position of a Dots-and-Boxes game is represented as a vector (and is not representable as an image), the use
     of convolutional layers does not make sense (as opposed to the original paper). Therefore, the model makes use of
     simple fully connected layers. Furthermore, the model is initialized to random weights.
     """

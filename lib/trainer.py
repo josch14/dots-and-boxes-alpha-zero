@@ -13,6 +13,7 @@ from lib.evaluator import Evaluator
 from lib.game import DotsAndBoxesGame
 from lib.mcts import MCTS
 from lib.model import AZNeuralNetwork
+from players.alpha_beta import AlphaBetaPlayer
 from players.neural_network import NeuralNetworkPlayer
 from players.random import RandomPlayer
 
@@ -27,7 +28,7 @@ class Trainer:
     Attributes
     ----------
     game_size : int
-        board size (width & height) of a Dots and Boxes game
+        board size (width & height) of a Dots-and-Boxes game
     mcts_parameters : dict
         hyperparameters concerning the MCTS
     model_parameters, optimizer_parameters, training_parameters : dict, dict, dict
@@ -116,14 +117,17 @@ class Trainer:
             win_fraction = self.evaluator_parameters["win_fraction"]
             n_games = self.evaluator_parameters["n_games"]
 
-            # 3.1) compare against random player
-            evaluator = Evaluator(
-                game_size=self.game_size,
-                player1=NeuralNetworkPlayer(self.model, name=f"TrainedModel(Iteration={iteration})"),
-                player2=RandomPlayer(),
-                n_games=n_games
-            )
-            evaluator.compare()
+            neural_network_player = NeuralNetworkPlayer(self.model, name=f"TrainedModel(Iteration={iteration})")
+            opponents = [RandomPlayer(), AlphaBetaPlayer(depth=1), AlphaBetaPlayer(depth=2), AlphaBetaPlayer(depth=3)]
+            # 3.1) compare against non-neural network players
+            for opponent in opponents:
+                evaluator = Evaluator(
+                    game_size=self.game_size,
+                    player1=neural_network_player,
+                    player2=opponent,
+                    n_games=n_games
+                )
+                evaluator.compare()
 
             # 3.2) compare against previous model
             evaluator = Evaluator(

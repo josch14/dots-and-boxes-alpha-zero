@@ -1,6 +1,6 @@
+from lib.game import DotsAndBoxesGame
 from lib.model import AZNeuralNetwork
 from players.player import AIPlayer
-import numpy as np
 
 
 class NeuralNetworkPlayer(AIPlayer):
@@ -10,7 +10,6 @@ class NeuralNetworkPlayer(AIPlayer):
         self.model = model
         self.model.eval()
 
-    def determine_move(self, s: np.ndarray) -> int:
-        # it can be assumed that s is in canonical form
-        move = self.model.determine_move(s)
+    def determine_move(self, s: DotsAndBoxesGame) -> int:
+        move = self.model.determine_move(s.get_canonical_s())
         return move

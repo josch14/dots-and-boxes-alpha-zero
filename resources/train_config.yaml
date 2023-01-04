@@ -2,14 +2,14 @@
 game_size : 3     # board size
 n_iterations: 1000  # total number of iterations of mcts + training + model comparison (AlphaGo Zero: 200)
 
-# MCTS parameters (INFO: 3x3 Dots and Boxes offers 24 valid moves, 19x19 GO offers 362 valid moves)
+# MCTS parameters (INFO: 3x3 Dots-and-Boxes offers 24 valid moves, 19x19 GO offers 362 valid moves)
 mcts_parameters:
-  n_games                   : 200  # number of games of self-play per iteration (AlphaGo Zero: 25,000)
-  n_simulations             : 100   # number of simulations during each MCTS (AlphaGo Zero: 1,600)
-  temperature_move_threshold: 3     # parameter regarding search space diversity (AlphaGo Zero: 30)
-  c_puct                    : 1.5   # PUCT algorithm parameter, used in Select during MCTS (AlphaGo Zero: ?)
+  n_games                   : 50  # number of games of self-play per iteration (AlphaGo Zero: 25,000)
+  n_simulations             : 150   # number of simulations during each MCTS (AlphaGo Zero: 1,600)
+  temperature_move_threshold: 2     # parameter regarding search space diversity (AlphaGo Zero: 30)
+  c_puct                    : 2.00  # PUCT algorithm parameter, used in Select during MCTS (AlphaGo Zero: ?)
   dirichlet_eps             : 0.25  # dirichlet noise: weight
-  dirichlet_alpha           : 0.83  # dirichlet noise: distribution parameter (= 10 / avg. number of moves=12)
+  dirichlet_alpha           : 0.80  # dirichlet noise: distribution parameter (= 10 / avg. number of moves=12)
 
 # neural network parameters
 model_parameters:
@@ -18,15 +18,15 @@ model_parameters:
 
 # neural network training: optimizer parameters
 optimizer_parameters:
-  learning_rate: 0.001  # learning rate for SGD (AlphaGo Zero: learning rate scheduling)
-  momentum     : 0.9    # momentum factor for SGD (AlphaGo Zero: 0.9)
-  weight_decay : 0.01   # L2 weight regularization (AlphaGo Zero: 10e-4)
+  learning_rate: 0.01    # learning rate for SGD (AlphaGo Zero: learning rate scheduling)
+  momentum     : 0.9     # momentum factor for SGD (AlphaGo Zero: 0.9)
+  weight_decay : 0.00001  # L2 weight regularization (AlphaGo Zero: 1e-4)
 
 # neural network training: training parameters
 training_parameters:
   game_buffer_size: 10000   # number of recent games whose samples are used for model training (AlphaGo Zero: 500,000)
   epochs          : 100000  # maximum number of training epochs
-  batch_size      : 512      # batch size (AlphaGo Zero: 2048)
+  batch_size      : 1024      # batch size (AlphaGo Zero: 2048)
   patience        : 10       # number of epochs until early stopping
 
 # evaluator (model comparison) parameters

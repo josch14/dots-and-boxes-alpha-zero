@@ -6,7 +6,7 @@ import numpy as np
 
 class DotsAndBoxesGame:
     """
-    Implementation of the Dots and Boxes game, including relevant parameters for representing the game state
+    Implementation of the Dots-and-Boxes game, including relevant parameters for representing the game state
     and the logic for playing the game.
 
     Attributes
@@ -26,7 +26,7 @@ class DotsAndBoxesGame:
         position vector s (i.e., the board representation) of length N_LINES. Each element corresponds to one line on
         the board
         element values: {-1, 0, 1} = {line drawn by player 2, line is free, line drawn by player 1}
-        the line indices correspond with the lines of a Dots and Boxes game in the following manner (i.e., first the
+        the line indices correspond with the lines of a Dots-and-Boxes game in the following manner (i.e., first the
         horizontal lines are numbered, then the vertical lines):
         +  0 +  1 +
         6    8   10

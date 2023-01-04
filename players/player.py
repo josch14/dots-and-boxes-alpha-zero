@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
-import numpy as np
-
+from lib.game import DotsAndBoxesGame
 
 class AIPlayer(ABC):
 
@@ -8,8 +7,5 @@ class AIPlayer(ABC):
         self.name = name
 
     @abstractmethod
-    def determine_move(self, s: np.ndarray) -> int:
-        """
-        s can be assumed to be in canonical form.
-        """
+    def determine_move(self, s: DotsAndBoxesGame) -> int:
         pass

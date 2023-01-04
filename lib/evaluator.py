@@ -9,12 +9,12 @@ from players.player import AIPlayer
 
 class Evaluator:
     """
-    Let two players (AIs) play games of Dots and Boxes against each other.
+    Let two players (AIs) play games of Dots-and-Boxes against each other.
 
     Attributes
     ----------
     game_size : int
-        board size (width & height) of a Dots and Boxes game
+        board size (width & height) of a Dots-and-Boxes game
     player1, player2 : AIPlayer, AIPlayer
         AI players that are compared against each other
     n_games : int
@@ -50,8 +50,7 @@ class Evaluator:
         game = DotsAndBoxesGame(self.game_size)
 
         while game.is_running():
-            s = game.get_canonical_s()
-            move = self.player1.determine_move(s) if game.current_player == 1 else self.player2.determine_move(s)
+            move = self.player1.determine_move(game) if game.current_player == 1 else self.player2.determine_move(game)
             game.execute_move(move)
 
         return game.result
