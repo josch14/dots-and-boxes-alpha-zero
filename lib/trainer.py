@@ -89,22 +89,15 @@ class Trainer:
             number of iterations to perform
         """
 
-        # evaluator parameters
-        win_fraction = self.evaluator_parameters["win_fraction"]
-        n_games = self.evaluator_parameters["n_games"]
-
         iteration_of_best_model = 0
         for iteration in range(1, n_iterations + 1):
             print(f"\n#################### Iteration {iteration}/{n_iterations} #################### ")
 
             # 1) perform games of self-play to obtain training data
             print("------------ Self-play using MCTS ------------")
-            self.train_examples_per_game.extend(self.perform_self_plays(
-                n_games=self.mcts_parameters["n_games"],
-                n_simulations=self.mcts_parameters["n_simulations"],
-                temperature_move_threshold=self.mcts_parameters["temperature_move_threshold"],
-                c_puct=self.mcts_parameters["c_puct"]
-            ))
+            self.train_examples_per_game.extend(
+                self.perform_self_plays(n_games=self.mcts_parameters["n_games"])
+            )
             # cut dataset to desired size
             while len(self.train_examples_per_game) > self.training_parameters["game_buffer_size"]:
                 self.train_examples_per_game.pop(0)
@@ -117,9 +110,11 @@ class Trainer:
 
 
             # 3) evaluator: model comparison
+            print("\n-------------- Model Comparison --------------")
             # if the trained network wins by a margin of > win_fraction, then it is subsequently used for self-play
             # generation, and also becomes the baseline for subsequent comparisons
-            print("\n-------------- Model Comparison --------------")
+            win_fraction = self.evaluator_parameters["win_fraction"]
+            n_games = self.evaluator_parameters["n_games"]
 
             # 3.1) compare against random player
             evaluator = Evaluator(
@@ -152,11 +147,7 @@ class Trainer:
             print("###########################################################")
 
 
-    def perform_self_plays(self,
-                           n_games: int,
-                           n_simulations: int,
-                           temperature_move_threshold: int,
-                           c_puct: float):
+    def perform_self_plays(self, n_games: int):
         """
         Perform games of self-play using MCTS.
 
@@ -164,8 +155,6 @@ class Trainer:
         ----------
         n_games : int
             number of games of self-play to perform
-        n_simulations, temperature_move_threshold, c_puct : int, int, float
-            see self.perform_self_play()
 
         Returns
         -------
@@ -175,11 +164,11 @@ class Trainer:
         train_examples_per_game = []
         self.model.eval()
 
-        args_repeat = [(n_simulations, temperature_move_threshold, c_puct)] * n_games
         start_time = time.time()
         with Pool(processes=self.n_workers) as pool:
-            for train_examples in pool.istarmap(self.perform_self_play, tqdm(args_repeat, file=stdout, smoothing=0.0)):
+            for train_examples in pool.istarmap(self.perform_self_play, tqdm([()] * n_games, file=stdout, smoothing=0.0)):
                 train_examples_per_game.append(train_examples)
+
 
         print("{0:d} games of Self-play resulted in {1:d} new training examples (without augmentations; after {2:.2f}s).".format(
             n_games, len([t for l in train_examples_per_game for t in l]), time.time() - start_time))
@@ -187,25 +176,11 @@ class Trainer:
         return train_examples_per_game
 
 
-    def perform_self_play(self,
-                          n_simulations: int,
-                          temperature_move_threshold: int,
-                          c_puct: float):
+    def perform_self_play(self):
         """
         Perform a single game of self-play using MCTS. The data for the game is stored as (s, p, v) at each
         time-step (i.e., each turn results in a training example), with s being the position/game state (vector),
         p being the policy vector and v being the value (scalar).
-
-        Parameters
-        ----------
-        n_simulations : int
-            number of simulations used for each MCTS (i.e., for each move)
-        temperature_move_threshold : int
-            when more than temperature_move_threshold moves were performed during self-play, the temperature parameter
-            is set from 1 to 0. This ensures that a diverse set of positions are encountered, as then the first moves
-            during MCTS are selected proportionally to their visit count
-        c_puct : float
-            constant determining level of exploration (parameter for PUCT algorithm utilized in MCTS: select)
 
         Returns
         -------
@@ -221,9 +196,13 @@ class Trainer:
         mcts = MCTS(
             model=self.model,
             s=deepcopy(game),
-            n_simulations=n_simulations,
-            c_puct=c_puct
+            mcts_parameters=self.mcts_parameters
         )
+
+        # when more than temperature_move_threshold moves were performed during self-play, the temperature parameter
+        # is set from 1 to 0. This ensures that a diverse set of positions are encountered, as then the first moves
+        # during MCTS are selected proportionally to their visit count
+        temperature_move_threshold = self.mcts_parameters["temperature_move_threshold"]
 
         # iteration over time-steps t during the game. At each time-step, a MCTS is executed using the previous iteration
         # of the neural network and a move is played by sampling the search probabilities

@@ -23,9 +23,13 @@ class MCTS:
         # simulations for each MCTS (only to determine the next move)
     c_puct : float
         constant determining level of exploration (PUCT algorithm in select)
+    dirichlet_eps : float
+        weight of dirichlet noise for root node of a simulation
+    dirichlet_alpha : float
+        distribution parameter for dirichlet noise
     """
 
-    def __init__(self, model: AZNeuralNetwork, s: DotsAndBoxesGame, n_simulations: int, c_puct: float):
+    def __init__(self, model: AZNeuralNetwork, s: DotsAndBoxesGame, mcts_parameters: dict):
 
         self.model = model
         self.root = AZNode(
@@ -33,8 +37,11 @@ class MCTS:
             a=None,
             s=s
         )
-        self.n_simulations = n_simulations
-        self.c_puct = c_puct
+
+        self.n_simulations = mcts_parameters["n_simulations"]
+        self.c_puct = mcts_parameters["c_puct"]
+        self.dirichlet_eps = mcts_parameters["dirichlet_eps"]
+        self.dirichlet_alpha = mcts_parameters["dirichlet_alpha"]
 
     def play(self, temp: int) -> [float]:
         """
@@ -52,11 +59,16 @@ class MCTS:
             move probabilities pi(a) ~ N(s,a)^(1/temp)
         """
 
+        s = self.root.s  # position s of root node (more accurate: the game state that contains position s)
+        valid_moves = self.root.s.get_valid_moves()
+
         # perform MCTS simulations
         for i in range(self.n_simulations):
-            self.search(self.root)
+            # dirichlet noise (only for valid moves), added later to the prior probabilities of the root node
+            dirichlet_noise = np.zeros((s.N_LINES,), dtype=np.float32)
+            dirichlet_noise[valid_moves] = np.random.dirichlet([self.dirichlet_alpha] * len(valid_moves))
 
-        s = self.root.s  # position s of root node (more accurate: the game state that contains position s)
+            self.search(self.root, is_root=True, dirichlet_noise=dirichlet_noise)
 
         # only valid moves may have a visit
         assert set(list(self.root.N.keys())).issubset(set(s.get_valid_moves()))
@@ -76,14 +88,18 @@ class MCTS:
         probs = [p / float(sum(probs)) for p in probs]
         return probs
 
-    def search(self, node: AZNode) -> float:
+    def search(self, node: AZNode, is_root: bool = False, dirichlet_noise: np.ndarray = None) -> float:
         """
-        Perform a single simulation within MCTS.
+        Recursively perform a single simulation within MCTS.
 
         Parameters
         ----------
         node : AZNode
             node that corresponds to the MCTS's current position s
+        is_root : bool
+            whether the current node is the root node of the search or not (relevant for dirichlet noise)
+        dirichlet_noise : bool
+            dirichlet noise that is applied only on the prior probabilities of the root node
 
         Returns
         -------
@@ -112,7 +128,7 @@ class MCTS:
             return v
 
         # node was visited before: continue traversing the tree
-        a = self.select(node)
+        a = self.select(node, is_root, dirichlet_noise)
 
         if a not in node.N:
             # applying the selected move means approaching a leaf (node which was not visited yet)
@@ -133,7 +149,7 @@ class MCTS:
 
         return v
 
-    def select(self, node: AZNode) -> int:
+    def select(self, node: AZNode, is_root: bool, dirichlet_noise: np.ndarray) -> int:
         """
         (a) Select.
         Select the move with maximum action value Q, plus an upper confidence bound U that depends on a stored
@@ -143,6 +159,10 @@ class MCTS:
         ----------
         node : AZNode
             (non-leaf) node that corresponds to the MCTS's current position s
+        is_root : bool
+            whether the current node is the root node of the search or not (relevant for dirichlet noise)
+        dirichlet_noise : bool
+            dirichlet noise that is applied only on the prior probabilities of the root node
 
         Returns
         -------
@@ -157,24 +177,28 @@ class MCTS:
         N_sum = sum(node.N.values())
         N_sqrt = math.sqrt(N_sum)
 
+        P = node.P if not is_root else \
+            (1 - self.dirichlet_eps) * node.P + self.dirichlet_eps * dirichlet_noise
+        assert abs(np.sum(P) - 1) < 0.00000001
+
         for a in node.s.get_valid_moves():
             # each move corresponds to a child node that may or may not have
             # already been visited
 
-            P = node.P[a]
+            p = P[a]
             if a in node.N:
-                Q = node.Q[a]
-                N = node.N[a]
+                q = node.Q[a]
+                n = node.N[a]
             else:
-                Q = 0
-                N = 0
+                q = 0
+                n = 0
 
             # upper confidence bound U(s, a) ~ P(s, a) / (1 + N(s, a))
-            U = self.c_puct * P * N_sqrt / (1 + N)
+            u = self.c_puct * p * N_sqrt / (1 + n)
 
             # maximize action value Q(s,a) + upper confidence bound U(s,a)
-            if Q + U > maximum:
-                maximum = Q + U
+            if q + u > maximum:
+                maximum = q + u
                 a_max = a
 
         return a_max
