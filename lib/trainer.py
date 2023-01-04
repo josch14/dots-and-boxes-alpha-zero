@@ -8,6 +8,7 @@ from tqdm import tqdm
 from sys import stdout
 
 # local import
+import lib.istarmap
 from lib.evaluator import Evaluator
 from lib.game import DotsAndBoxesGame
 from lib.mcts import MCTS
@@ -177,8 +178,8 @@ class Trainer:
         args_repeat = [(n_simulations, temperature_move_threshold, c_puct)] * n_games
         start_time = time.time()
         with Pool(processes=self.n_workers) as pool:
-            for train_examples in pool.starmap(self.perform_self_play, tqdm(args_repeat, file=stdout)):
-                train_examples_per_game.append(train_examples),
+            for train_examples in pool.istarmap(self.perform_self_play, tqdm(args_repeat, file=stdout, smoothing=0.0)):
+                train_examples_per_game.append(train_examples)
 
         print("{0:d} games of Self-play resulted in {1:d} new training examples (without augmentations; after {2:.2f}s).".format(
             n_games, len([t for l in train_examples_per_game for t in l]), time.time() - start_time))
