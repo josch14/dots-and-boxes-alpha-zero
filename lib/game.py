@@ -47,7 +47,7 @@ class DotsAndBoxesGame:
 
         # board representation in position vector s
         self.N_LINES = 2 * size * (size + 1)
-        self.s = np.zeros((self.N_LINES,), dtype=np.float32)  # torch uses float32
+        self.s = np.zeros((self.N_LINES,), dtype=np.float32)
 
         # boxes which can be captured by drawing lines
         self.N_BOXES = size * size

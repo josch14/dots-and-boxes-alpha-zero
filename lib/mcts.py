@@ -179,7 +179,8 @@ class MCTS:
 
         P = node.P if not is_root else \
             (1 - self.dirichlet_eps) * node.P + self.dirichlet_eps * dirichlet_noise
-        assert abs(np.sum(P) - 1) < 0.00000001
+        assert abs(np.sum(P) - 1) < 1e-7, \
+            f"is_root: {is_root}, sum of P: {np.sum(node.P)}, sum of P after adding dirichlet noise: {np.sum(P)}"
 
         for a in node.s.get_valid_moves():
             # each move corresponds to a child node that may or may not have
