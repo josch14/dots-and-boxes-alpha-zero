@@ -7,9 +7,9 @@ from sys import stdout
 import numpy as np
 from tqdm import tqdm
 
+import lib.istarmap
 from lib.game import DotsAndBoxesGame
 from players.alpha_beta import AlphaBetaPlayer
-
 
 def main(game_size: int, n_games: int, depth: int, n_workers: int):
 
@@ -78,7 +78,7 @@ python generate_optimization_data.py --game_size 3 --n_games 100000 --depth 3 --
 parser = argparse.ArgumentParser()
 parser.add_argument('-s', '--game_size', type=int, default=3,
                     help='Size of the Dots-and-Boxes games (in number of boxes per row and column).')
-parser.add_argument('-n', '--n_games', type=int, default=10,
+parser.add_argument('-n', '--n_games', type=int, default=100,
                     help='Number of games of self-play to perform.')
 parser.add_argument('-d', '--depth', type=int, default=3,
                     help='Specifies the depth of a alpha-beta search')
