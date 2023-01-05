@@ -267,14 +267,18 @@ class Trainer:
             weight_decay=self.optimizer_parameters["weight_decay"],
         )
 
+
         # prepare data
-        # augment dataset by including rotations and reflections of each position
+        # augment dataset by including rotations and reflections of each position (and probs vector!)
         train_examples = []
         for train_examples_list in self.train_examples_per_game:
             for s, p, v in train_examples_list:
-                train_examples.extend(
-                    [(s_augmented, p, v) for s_augmented in DotsAndBoxesGame.get_rotations_and_reflections(s)]
-                )
+                train_examples.extend(zip(
+                    DotsAndBoxesGame.get_rotations_and_reflections(s),
+                    DotsAndBoxesGame.get_rotations_and_reflections(np.asarray(p)),
+                    [v] * 8
+                ))
+
         game_buffer_size = self.training_parameters["game_buffer_size"]
         print(f"The dataset consist of {len(train_examples)} training examples (including augmentations) from the "
               f"{len(self.train_examples_per_game)}/{game_buffer_size} most recent games.")
