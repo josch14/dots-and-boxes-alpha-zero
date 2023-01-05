@@ -187,7 +187,9 @@ class DotsAndBoxesGame:
         """
         The neural network expects the position vector s from the POV of the current player (=1).
         """
-        return self.current_player * self.s
+        canonical_s = self.current_player * self.s
+        canonical_s[canonical_s == 0.] = 0.
+        return canonical_s
 
     @staticmethod
     def get_rotations_and_reflections(s: np.ndarray) -> List[np.ndarray]:

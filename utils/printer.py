@@ -36,9 +36,9 @@ class DotsAndBoxesPrinter(DotsAndBoxesGame):
         value = self.s[line]
         color = value_to_color(value)
 
-        string = "+" + colored("------", color) if value != 0 else \
-            "+  {: >2d}  ".format(line)
-        return (string + "+") if last_column else string
+        string = "°" + colored("------", color) if value != 0 else \
+            "°  {: >2d}  ".format(line)
+        return (string + "°") if last_column else string
 
     def str_vertical_line(self, left_line: int, print_line_number: bool) -> str:
 

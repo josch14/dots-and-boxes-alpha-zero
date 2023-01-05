@@ -29,18 +29,27 @@ def main(size: int, opponent: AIPlayer):
                 if move in game.get_valid_moves():
                     break
                 print(f"Line {move} is not a valid move. Please select a move in {game.get_valid_moves()}.")
+            last_move_by_player = True
 
         else:
             # an AI opponent is at turn
             time.sleep(1.0)
+            start_time = time.time()
             move = opponent.determine_move(game)
+            stopped_time = time.time() - start_time
+            last_move_by_player = False
 
         game.execute_move(move)
 
         # print new game state
         cls()
+        if not last_move_by_player:
+            print("Computation time of opponent for previous move {0:.2f}s".format(stopped_time))
+        else:
+            print()
         print(game.state_string())
         print(game.board_string())
+
 
     if game.result == 1:
         print("The game is over.. You won!")
@@ -53,12 +62,12 @@ def main(size: int, opponent: AIPlayer):
 
 """
 Example call: 
-python play_console.py -o alpha_beta -depth 5 -size 3
+python play_console.py --o alpha_beta --depth 3 --size 3
 """
 parser = argparse.ArgumentParser()
 parser.add_argument('-o', '--opponent', type=str, default="alpha_beta", choices=["person", "random", "alpha_beta"],
                     help='Type of opponent to play against.')
-parser.add_argument('-d', '--depth', type=int, default=5,
+parser.add_argument('-d', '--depth', type=int, default=3,
                     help='Specifies the depth of a search in case of an opponent that utilizes Alpha–beta pruning.')
 parser.add_argument('-s', '--size', type=int, default=3,
                     help='Size of the Dots-and-Boxes game (in number of boxes per row and column).')
