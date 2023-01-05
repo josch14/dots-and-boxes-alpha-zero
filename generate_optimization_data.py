@@ -101,5 +101,5 @@ if __name__ == '__main__':
 
     if not os.path.exists('data/'):
         os.makedirs('data/')
-    with open('data/optimization_data.json', 'w') as f:
+    with open('data/optimization_data_30000.json', 'w') as f:
         json.dump(save_dict, f)
