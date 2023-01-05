@@ -3,8 +3,9 @@ from typing import Tuple
 import numpy as np
 import random
 
-from lib.game import DotsAndBoxesGame
-from players.player import AIPlayer
+# local import
+from .player import AIPlayer
+from ..game import DotsAndBoxesGame
 
 inf = float("inf")
 
@@ -17,30 +18,32 @@ class AlphaBetaPlayer(AIPlayer):
 
     def determine_move(self, game: DotsAndBoxesGame) -> int:
 
-        s = game.s
         # let the first four moves be random in order to drastically reduce computation time
-        if np.count_nonzero(s) < 4:
-            # 1) first check whether there already is a box with three lines (simple misplay by opponent)
-            for box in np.ndindex(game.boxes.shape):
-                lines = game.get_lines_of_box(box)
-                if len([line for line in lines if s[line] != 0]) == 3:
-                    # there has to be one line which is not drawn yet
-                    move = [line for line in lines if s[line] == 0][0]
-                    return move
-
-            # 2) moves may only be selected when, after drawing, each box contains a maximum of two drawn lines
-            valid_moves = game.get_valid_moves()
-            random.shuffle(valid_moves)
-            while True:
-                move = valid_moves.pop(0)
-                execute_move = True
-                for box in game.get_boxes_of_line(move):
-                    # box should not already have two drawn lines
+        # TODO do similar thing for other games sizes?
+        if game.SIZE == 3:
+            s = game.s
+            if np.count_nonzero(s) < 4:
+                # 1) first check whether there already is a box with three lines (simple misplay by opponent)
+                for box in np.ndindex(game.boxes.shape):
                     lines = game.get_lines_of_box(box)
-                    if len([line for line in lines if s[line] != 0]) == 2:
-                        execute_move = False
-                if execute_move:
-                    return move
+                    if len([line for line in lines if s[line] != 0]) == 3:
+                        # there has to be one line which is not drawn yet
+                        move = [line for line in lines if s[line] == 0][0]
+                        return move
+
+                # 2) moves may only be selected when, after drawing, each box contains a maximum of two drawn lines
+                valid_moves = game.get_valid_moves()
+                random.shuffle(valid_moves)
+                while True:
+                    move = valid_moves.pop(0)
+                    execute_move = True
+                    for box in game.get_boxes_of_line(move):
+                        # box should not already have two drawn lines
+                        lines = game.get_lines_of_box(box)
+                        if len([line for line in lines if s[line] != 0]) == 2:
+                            execute_move = False
+                    if execute_move:
+                        return move
 
 
         move, _ = AlphaBetaPlayer.alpha_beta_search(

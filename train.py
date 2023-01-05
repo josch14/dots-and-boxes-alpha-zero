@@ -2,7 +2,7 @@ import yaml
 import argparse
 
 # local import
-from lib.trainer import Trainer
+from trainer import Trainer
 
 
 """

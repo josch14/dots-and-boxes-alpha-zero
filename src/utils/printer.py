@@ -1,10 +1,11 @@
-from lib.game import DotsAndBoxesGame
 import sys
-
 # enable colored prints
 from termcolor import colored
 import colorama
 colorama.init()
+
+# local import
+from ..game import DotsAndBoxesGame
 
 
 class Color:

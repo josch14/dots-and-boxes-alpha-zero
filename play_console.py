@@ -2,11 +2,8 @@ import argparse
 import os
 import time
 
-from players.alpha_beta import AlphaBetaPlayer
-from players.player import AIPlayer
-from players.random import RandomPlayer
-from utils.printer import DotsAndBoxesPrinter
-
+# local import
+from src import DotsAndBoxesPrinter, AlphaBetaPlayer, AIPlayer, RandomPlayer
 
 def cls(): os.system("cls" if os.name == "nt" else "clear")
 

@@ -1,10 +1,8 @@
 from typing import Tuple
-from sys import stdout
-from tqdm import tqdm
 
 # local import
-from lib.game import DotsAndBoxesGame
-from players.player import AIPlayer
+from .game import DotsAndBoxesGame
+from .players.player import AIPlayer
 
 
 class Evaluator:

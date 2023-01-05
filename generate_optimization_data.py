@@ -7,9 +7,8 @@ from sys import stdout
 import numpy as np
 from tqdm import tqdm
 
-import lib.istarmap
-from lib.game import DotsAndBoxesGame
-from players.alpha_beta import AlphaBetaPlayer
+from src import DotsAndBoxesGame, AlphaBetaPlayer
+
 
 def main(game_size: int, n_games: int, depth: int, n_workers: int):
 
@@ -61,12 +60,14 @@ def perform_self_play(size: int, depth: int):
 
     train_examples = []
     for train_example in train_examples_pre:
-        game_dict = {
+        p = [0] * game.N_LINES
+        p[train_example[1]] = 1
+        train_example_dict = {
             "s": [round(e) for e in train_example[0].tolist()],
-            "a": train_example[1],
+            "p": p,
             "v": train_example[2]
         }
-        train_examples.append(game_dict)
+        train_examples.append(train_example_dict)
 
     return train_examples
 
@@ -78,7 +79,7 @@ python generate_optimization_data.py --game_size 3 --n_games 100000 --depth 3 --
 parser = argparse.ArgumentParser()
 parser.add_argument('-s', '--game_size', type=int, default=3,
                     help='Size of the Dots-and-Boxes games (in number of boxes per row and column).')
-parser.add_argument('-n', '--n_games', type=int, default=100,
+parser.add_argument('-n', '--n_games', type=int, default=10,
                     help='Number of games of self-play to perform.')
 parser.add_argument('-d', '--depth', type=int, default=3,
                     help='Specifies the depth of a alpha-beta search')

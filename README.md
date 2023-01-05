@@ -11,7 +11,7 @@ conda activate azero_dab
 conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cpuonly -c pytorch  # cpu only
 conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.3 -c pytorch  # gpu support
 
-conda install -c anaconda numpy=1.23.4
+conda install -c anaconda numpy=1.23.5
 conda install -c conda-forge tqdm
 conda install -c anaconda pyyaml
 

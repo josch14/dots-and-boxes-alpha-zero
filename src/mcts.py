@@ -3,10 +3,10 @@ import math
 from random import randint
 import numpy as np
 
-# local import
-from lib.game import DotsAndBoxesGame
-from lib.model import AZNeuralNetwork
-from lib.node import AZNode
+# local imports
+from .game import DotsAndBoxesGame
+from .model import AZNeuralNetwork
+from .node import AZNode
 
 
 class MCTS:

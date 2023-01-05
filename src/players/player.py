@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
-from lib.game import DotsAndBoxesGame
+
+# local import
+from ..game import DotsAndBoxesGame
+
 
 class AIPlayer(ABC):
 

@@ -1,4 +1,5 @@
-from lib.game import DotsAndBoxesGame
+# local import
+from .game import DotsAndBoxesGame
 
 
 class AZNode:

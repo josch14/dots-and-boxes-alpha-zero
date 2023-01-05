@@ -1,6 +1,7 @@
-from lib.game import DotsAndBoxesGame
-from lib.model import AZNeuralNetwork
-from players.player import AIPlayer
+# local import
+from .player import AIPlayer
+from ..game import DotsAndBoxesGame
+from ..model import AZNeuralNetwork
 
 
 class NeuralNetworkPlayer(AIPlayer):

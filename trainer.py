@@ -8,14 +8,8 @@ from tqdm import tqdm
 from sys import stdout
 
 # local import
-import lib.istarmap
-from lib.evaluator import Evaluator
-from lib.game import DotsAndBoxesGame
-from lib.mcts import MCTS
-from lib.model import AZNeuralNetwork
-from players.alpha_beta import AlphaBetaPlayer
-from players.neural_network import NeuralNetworkPlayer
-from players.random import RandomPlayer
+from src import Evaluator, DotsAndBoxesGame, MCTS, AZNeuralNetwork, \
+    AlphaBetaPlayer, NeuralNetworkPlayer, RandomPlayer, istarmap
 
 
 class Trainer:
@@ -284,6 +278,10 @@ class Trainer:
         game_buffer_size = self.training_parameters["game_buffer_size"]
         print(f"The dataset consist of {len(train_examples)} training examples (including augmentations) from the "
               f"{len(self.train_examples_per_game)}/{game_buffer_size} most recent games.")
+
+        # TODO "Parameters were updated from 700,000 mini-batches of 2,048 positions. ...
+        # TODO ... Each mini-batch of data is  sampled uniformly at random from all positions of the most recent 500,000 games
+        # TODO of self-play"
 
         shuffle(train_examples)
         s_train, p_train, v_train = [list(t) for t in zip(*train_examples)]

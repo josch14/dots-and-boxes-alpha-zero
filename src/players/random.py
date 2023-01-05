@@ -1,7 +1,8 @@
-from lib.game import DotsAndBoxesGame
-from players.player import AIPlayer
 import random
-import numpy as np
+
+# local import
+from .player import AIPlayer
+from ..game import DotsAndBoxesGame
 
 
 class RandomPlayer(AIPlayer):
