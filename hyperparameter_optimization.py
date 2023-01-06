@@ -44,10 +44,10 @@ def main(s, p, v):
     v_batched_val = v_batched[n_batches_train:]
 
 
-    LEARNING_RATE = [0.01, 0.001, 0.0001]
-    WEIGHT_DECAY = [0.001, 0.0001, 0.00001]
-    DROPOUT = [0.0, 0.1, 0.2]
-    HIDDEN_LAYERS = [[128, 128], [256, 256]]
+    LEARNING_RATE = [0.1, 0.01]
+    WEIGHT_DECAY = [0.00001, 0.0]
+    DROPOUT = [0.0, 0.2]
+    HIDDEN_LAYERS = [[128, 128], [256, 256], [128, 128, 128], [256, 256, 256]]
     # HIDDEN_LAYERS = [[128, 128, 128], [256, 256, 256]]
     for learning_rate in LEARNING_RATE:
         for weight_decay in WEIGHT_DECAY:
