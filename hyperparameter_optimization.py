@@ -53,11 +53,9 @@ def main(s, p, v):
         for weight_decay in WEIGHT_DECAY:
             for dropout in DROPOUT:
                 for hidden_layers in HIDDEN_LAYERS:
-                    print(f"\n\n lr: {learning_rate} | weight_decay: {weight_decay} | layers: {hidden_layers}  (batch size fix: {BATCH_SIZE})")
+                    print(f"\n\n lr: {learning_rate} | weight_decay: {weight_decay} | dropout: {dropout} | layers: {hidden_layers}  (batch size fix: {BATCH_SIZE})")
                     ################################################################################
                     # model parameters
-
-                    dropout = 0.0
 
                     model = AZNeuralNetwork(
                         game_size=3,
