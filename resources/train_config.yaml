@@ -13,8 +13,8 @@ mcts_parameters:
 
 # neural network parameters
 model_parameters:
-  hidden_layers: [1024, 1024, 1024, 512]  # hidden layers with corresponding number of units
-  dropout      : 0.2                      # dropout after each layer except output
+  hidden_layers: [256, 256]  # hidden layers with corresponding number of units
+  dropout      : 0.2         # dropout after each layer except output
 
 # neural network training: optimizer parameters
 optimizer_parameters:
@@ -24,10 +24,9 @@ optimizer_parameters:
 
 # neural network training: training parameters
 training_parameters:
-  game_buffer_size: 100000   # number of recent games whose samples are used for model training (AlphaGo Zero: 500,000)
-  epochs          : 100000  # maximum number of training epochs
-  batch_size      : 1024      # batch size (AlphaGo Zero: 2048)
-  patience        : 10       # number of epochs until early stopping
+  game_buffer: 50000   # number of recent games whose samples are used for model training (AlphaGo Zero: 500,000)
+  n_batches  : 16000   # number of mini-batches (AlphaGo Zero: 700,000)
+  batch_size : 1024    # batch size (AlphaGo Zero: 2,048)
 
 # evaluator (model comparison) parameters
 evaluator_parameters:

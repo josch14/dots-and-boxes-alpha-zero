@@ -72,7 +72,7 @@ class Trainer:
             self.model.load_checkpoint(model_name)
         self.model.to(self.inference_device)
 
-        self.train_examples_per_game = []
+        self.train_examples_per_game_augmented = []
 
     def loop(self, n_iterations: int):
         """
@@ -90,12 +90,24 @@ class Trainer:
 
             # 1) perform games of self-play to obtain training data
             print("------------ Self-play using MCTS ------------")
-            self.train_examples_per_game.extend(
-                self.perform_self_plays(n_games=self.mcts_parameters["n_games"])
-            )
+            train_examples_per_game = self.perform_self_plays(n_games=self.mcts_parameters["n_games"])
+
+            # augment train examples for each game
+            train_examples_per_game_augmented = []
+            for train_examples in train_examples_per_game:
+                train_examples_augmented = []
+                for s, p, v in train_examples:
+                    train_examples_augmented.extend(zip(
+                        DotsAndBoxesGame.get_rotations_and_reflections(s),
+                        DotsAndBoxesGame.get_rotations_and_reflections(np.asarray(p)),
+                        [v] * 8
+                    ))
+                train_examples_per_game_augmented.append(train_examples_augmented)
+            self.train_examples_per_game_augmented.extend(train_examples_per_game_augmented)
+
             # cut dataset to desired size
-            while len(self.train_examples_per_game) > self.training_parameters["game_buffer_size"]:
-                self.train_examples_per_game.pop(0)
+            while len(self.train_examples_per_game_augmented) > self.training_parameters["game_buffer"]:
+                self.train_examples_per_game_augmented.pop(0)
 
 
             # 2) model learning
@@ -256,9 +268,9 @@ class Trainer:
         """
 
         # run a complete training for a neural network
-        epochs = self.training_parameters["epochs"]
+        game_buffer = self.training_parameters["game_buffer"]
+        n_batches = self.training_parameters["n_batches"]
         batch_size = self.training_parameters["batch_size"]
-        patience = self.training_parameters["patience"]
 
         optimizer = torch.optim.SGD(
             self.model.parameters(),
@@ -267,26 +279,15 @@ class Trainer:
             weight_decay=self.optimizer_parameters["weight_decay"],
         )
 
-
         # prepare data
         # augment dataset by including rotations and reflections of each position (and probs vector!)
-        train_examples = []
-        for train_examples_list in self.train_examples_per_game:
-            for s, p, v in train_examples_list:
-                train_examples.extend(zip(
-                    DotsAndBoxesGame.get_rotations_and_reflections(s),
-                    DotsAndBoxesGame.get_rotations_and_reflections(np.asarray(p)),
-                    [v] * 8
-                ))
+        train_examples = [t for t_list in self.train_examples_per_game_augmented for t in t_list]
 
-        game_buffer_size = self.training_parameters["game_buffer_size"]
-        print(f"The dataset consist of {len(train_examples)} training examples (including augmentations) from the "
-              f"{len(self.train_examples_per_game)}/{game_buffer_size} most recent games.")
+        print(f"The model is updated with {len(train_examples):,} training examples (including augmentations) from the "
+              f"{len(self.train_examples_per_game_augmented):,}/{game_buffer:,} most recent games.")
 
-        # TODO "Parameters were updated from 700,000 mini-batches of 2,048 positions. ...
-        # TODO ... Each mini-batch of data is  sampled uniformly at random from all positions of the most recent 500,000 games
-        # TODO of self-play"
-
+        # shuffle and batch data
+        # TODO we want n_batches, each with batch_size training examples. Sample those randomly from the list of training examples
         shuffle(train_examples)
         s_train, p_train, v_train = [list(t) for t in zip(*train_examples)]
         s_batched, p_batched, v_batched = [], [], []
@@ -305,6 +306,7 @@ class Trainer:
 
         self.model.to(self.training_device)
 
+        # TODO loop over batches --> no epoch anymore
         for epoch in range(1, epochs + 1):
 
             if current_patience > patience:
