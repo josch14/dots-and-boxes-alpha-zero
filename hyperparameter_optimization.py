@@ -12,7 +12,7 @@ from tqdm import tqdm
 from src import AZNeuralNetwork, DotsAndBoxesGame
 
 
-def main(config, s_train, p_train, v_train):
+def main(s_train, p_train, v_train):
 
     training_device = "cuda"
 
@@ -20,7 +20,7 @@ def main(config, s_train, p_train, v_train):
     # model parameters
     model = AZNeuralNetwork(
         game_size=3,
-        model_parameters={"hidden_layers": [1024, 1024, 1024, 512], "dropout": 0.2},
+        model_parameters={"hidden_layers": [1024, 1024], "dropout": 0.0},
         inference_device=None
     )
 
@@ -109,7 +109,6 @@ def main(config, s_train, p_train, v_train):
 """
 # TODO remove patience as it does not make sense anymore
 if __name__ == '__main__':
-    CONFIG_FILE = "resources/train_config.yaml"
 
     with open('data/optimization_data_augmented.json', 'r') as f:
         train_examples = json.load(f)
@@ -120,8 +119,5 @@ if __name__ == '__main__':
     shuffle(train_examples)
     s_train, p_train, v_train = [list(t) for t in zip(*train_examples)]
 
-    with open(CONFIG_FILE) as f:
-        config = yaml.safe_load(f)
-
-    main(config, s_train, p_train, v_train)
+    main(s_train, p_train, v_train)
 
