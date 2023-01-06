@@ -12,89 +12,118 @@ from tqdm import tqdm
 from src import AZNeuralNetwork, DotsAndBoxesGame
 
 
-def main(s_train, p_train, v_train):
+def main(s, p, v):
 
     training_device = "cuda"
 
-    ################################################################################
-    # model parameters
-    model = AZNeuralNetwork(
-        game_size=3,
-        model_parameters={"hidden_layers": [1024, 1024], "dropout": 0.0},
-        inference_device=None
-    )
-
     # training parameters
-    epochs = 100000000
-    patience = 100000000
-    batch_size = 2048
+    BATCH_SIZE = 1024
+    mse_factor = 0.01
 
-    # optimization parameters
-    optimizer = torch.optim.SGD(
-        model.parameters(),
-        lr=0.01,
-        momentum=0.9,
-        weight_decay=0.00001,
-    )
-    ################################################################################
-
+    """
+    Data Prep using batch size.
+    """
     print(f"The dataset consist of {len(train_examples)} training examples (including augmentations).")
 
     s_batched, p_batched, v_batched = [], [], []
-    for i in tqdm(range(0, len(train_examples), batch_size), file=stdout):
-        s_batched.append(torch.tensor(np.vstack(s_train[i:i + batch_size]), dtype=torch.float32, device=training_device))
-        p_batched.append(torch.tensor(np.vstack(p_train[i:i + batch_size]), dtype=torch.float32, device=training_device))
-        v_batched.append(torch.tensor(v_train[i:i + batch_size], dtype=torch.float32, device=training_device))  # scalar v
+    for i in tqdm(range(0, len(train_examples), BATCH_SIZE), file=stdout):
+        s_batched.append(torch.tensor(np.vstack(s[i:i + BATCH_SIZE]), dtype=torch.float32, device=training_device))
+        p_batched.append(torch.tensor(np.vstack(p[i:i + BATCH_SIZE]), dtype=torch.float32, device=training_device))
+        v_batched.append(torch.tensor(v[i:i + BATCH_SIZE], dtype=torch.float32, device=training_device))  # scalar v
+
     n_batches = len(s_batched)
-    print(f"# batches: {n_batches}")
+    n_batches_train = round(n_batches*0.9)
+    n_batches_val = n_batches-n_batches_train
+    print(f"# batches: {n_batches} / # train batches: {n_batches_train} / # val batches: {n_batches_val}")
 
-    current_patience = 0
-    best_loss = 1e10
+    s_batched_train = s_batched[:n_batches_train]
+    p_batched_train = p_batched[:n_batches_train]
+    v_batched_train = v_batched[:n_batches_train]
+    s_batched_val = s_batched[n_batches_train:]
+    p_batched_val = p_batched[n_batches_train:]
+    v_batched_val = v_batched[n_batches_train:]
 
-    CrossEntropyLoss = torch.nn.CrossEntropyLoss()
-    MSELoss = torch.nn.MSELoss()
 
-    model.to(training_device)
+    LEARNING_RATE = [0.01, 0.001, 0.0001]
+    WEIGHT_DECAY = [0.001, 0.0001, 0.00001]
+    DROPOUT = [0.0, 0.1, 0.2]
+    HIDDEN_LAYERS = [[128, 128], [256, 256]]
+    # HIDDEN_LAYERS = [[128, 128, 128], [256, 256, 256]]
+    for learning_rate in LEARNING_RATE:
+        for weight_decay in WEIGHT_DECAY:
+            for dropout in DROPOUT:
+                for hidden_layers in HIDDEN_LAYERS:
+                    print(f"\n\n lr: {learning_rate} | weight_decay: {weight_decay} | layers: {hidden_layers}  (batch size fix: {BATCH_SIZE})")
+                    ################################################################################
+                    # model parameters
 
-    for epoch in range(1, epochs + 1):
+                    dropout = 0.0
 
-        if current_patience > patience:
-            print(f"Early stopping after {epoch} epochs.")
-            break
+                    model = AZNeuralNetwork(
+                        game_size=3,
+                        model_parameters={"hidden_layers": hidden_layers, "dropout": dropout},
+                        inference_device=None
+                    )
 
-        start_time = time.time()
 
-        # train model
-        model.train()
-        for i in tqdm(range(n_batches)):
-            optimizer.zero_grad()
+                    # optimization parameters
+                    optimizer = torch.optim.SGD(
+                        model.parameters(),
+                        lr=learning_rate,
+                        momentum=0.9,
+                        weight_decay=weight_decay,
+                    )
+                    ################################################################################
 
-            p, v = model.forward(s_batched[i])
 
-            loss = CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
-            loss.backward()
-            optimizer.step()
+                    CrossEntropyLoss = torch.nn.CrossEntropyLoss()
+                    MSELoss = torch.nn.MSELoss()
 
-        # evaluate model on train set
-        model.eval()
-        with torch.no_grad():
-            # calculate loss per training example
-            loss = 0
-            for i in range(n_batches):
-                optimizer.zero_grad()
-                p, v = model.forward(s_batched[i])
-                loss += CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
-            loss = loss / n_batches
+                    model.to(training_device)
 
-            print("[Epoch {0:d}] Loss: {1:.5f} (after {2:.2f}s). ".format(epoch, loss, time.time() - start_time), end="")
+                    for epoch in range(1, 12 + 1):
 
-            if loss < best_loss:
-                best_loss = loss
-                current_patience = 0
-                print("New best model achieved!")
-            else:
-                current_patience += 1
-                print("")
+                        # train model
+                        model.train()
+                        for i in tqdm(range(n_batches_train), file=stdout):
+                            optimizer.zero_grad()
+
+                            p, v = model.forward(s_batched_train[i])
+
+                            loss = CrossEntropyLoss(p, p_batched_train[i]) + mse_factor*MSELoss(v, v_batched_train[i])
+                            loss.backward()
+                            optimizer.step()
+
+                        # evaluate model on train set
+                        model.eval()
+                        with torch.no_grad():
+                            """
+                            Train loss
+                            """
+                            # calculate loss per training example
+                            loss = 0
+                            for i in range(n_batches_train):
+                                optimizer.zero_grad()
+                                p, v = model.forward(s_batched_train[i])
+                                loss += CrossEntropyLoss(p, p_batched_train[i]) + mse_factor*MSELoss(v, v_batched_train[i])
+                            loss = loss / n_batches_train
+
+                            print("[Epoch {0:d}] Train Loss: {1:.5f}. ".format(epoch, loss))
+
+
+                            """
+                            Val loss
+                            """
+                            # calculate loss per training example
+                            loss = 0
+                            for i in range(n_batches_val):
+                                optimizer.zero_grad()
+                                p, v = model.forward(s_batched_val[i])
+                                loss += CrossEntropyLoss(p, p_batched_val[i]) + mse_factor*MSELoss(v, v_batched_val[i])
+                            loss = loss / n_batches_val
+
+                            print("[Epoch {0:d}] Val Loss: {1:.5f}. ".format(epoch, loss))
+
 
 
 """
@@ -110,14 +139,15 @@ def main(s_train, p_train, v_train):
 # TODO remove patience as it does not make sense anymore
 if __name__ == '__main__':
 
+    n_total = 10000000
+
     with open('data/optimization_data_augmented.json', 'r') as f:
-        train_examples = json.load(f)
-        train_examples = train_examples[:8000000]
+        train_examples = json.load(f)[:n_total]
 
     print(f"# train examples: {len(train_examples)}")
     train_examples = [(t["s"], t["p"], t["v"]) for t in train_examples]
     shuffle(train_examples)
-    s_train, p_train, v_train = [list(t) for t in zip(*train_examples)]
+    s, p, v = [list(t) for t in zip(*train_examples)]
 
-    main(s_train, p_train, v_train)
+    main(s, p, v)
 
