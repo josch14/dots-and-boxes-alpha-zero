@@ -1,0 +1,18 @@
+
+# neural network parameters
+model_parameters:
+  hidden_layers: [1024, 1024, 1024, 512]  # hidden layers with corresponding number of units
+  dropout      : 0.2                      # dropout after each layer except output
+
+# neural network training: optimizer parameters
+optimizer_parameters:
+  learning_rate: 0.01    # learning rate for SGD (AlphaGo Zero: learning rate scheduling)
+  momentum     : 0.9     # momentum factor for SGD (AlphaGo Zero: 0.9)
+  weight_decay : 0.00001  # L2 weight regularization (AlphaGo Zero: 1e-4)
+
+# neural network training: training parameters
+training_parameters:
+  game_buffer_size: 100000   # number of recent games whose samples are used for model training (AlphaGo Zero: 500,000)
+  epochs          : 100000  # maximum number of training epochs
+  batch_size      : 1024      # batch size (AlphaGo Zero: 2048)
+  patience        : 10       # number of epochs until early stopping

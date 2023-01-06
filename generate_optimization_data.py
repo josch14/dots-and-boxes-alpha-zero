@@ -103,3 +103,70 @@ if __name__ == '__main__':
         os.makedirs('data/')
     with open('data/optimization_data_30000.json', 'w') as f:
         json.dump(save_dict, f)
+
+
+
+# TODO add augmentation code
+"""
+import json
+from sys import stdout
+
+import numpy as np
+from tqdm import tqdm
+
+from src import DotsAndBoxesGame
+
+if __name__ == '__main__':
+    CONFIG_FILE = "resources/train_config.yaml"
+
+    train_examples = []
+    for filename in [
+        'data/optimization_data_25000.json',
+        'data/optimization_data_30000.json',
+        'data/optimization_data_12500a.json',
+        'data/optimization_data_12500b.json',
+        'data/optimization_data_20000.json']:
+
+        print("loading " + filename)
+        with open(filename, 'r') as f:
+            save_dict = json.load(f)
+
+            train_examples_per_game = save_dict["data"]
+            for game_id in train_examples_per_game:
+                train_examples.extend(train_examples_per_game[game_id])
+
+
+    train_examples = [(t["s"], t["p"], t["v"]) for t in train_examples]
+    s_train, p_train, v_train = [list(t) for t in zip(*train_examples)]
+
+
+    train_examples_augmented = []
+    train_examples = []
+    for s, p, v in tqdm(zip(s_train, p_train, v_train), file=stdout, total=len(s_train)):
+        # with augmentations
+        train_examples_augmented.extend(zip(
+            DotsAndBoxesGame.get_rotations_and_reflections(np.asarray(s)),
+            DotsAndBoxesGame.get_rotations_and_reflections(np.asarray(p)),
+            [v] * 8
+        ))
+
+        # without augmentations
+        train_examples.append([
+            [round(e) for e in s],
+            [round(e) for e in p],
+            v])
+
+    print("rounding ...")
+    train_examples = [[[round(e) for e in s], [round(e) for e in p], v] for s, p, v in train_examples]
+    train_examples_augmented = [[[round(e) for e in s], [round(e) for e in p], v] for s, p, v in train_examples_augmented]
+
+    print("creating dicts ...")
+    train_examples = [{"s": t[0], "p": t[1], "v": t[2]} for t in train_examples]
+    train_examples_augmented = [{"s": t[0], "p": t[1], "v": t[2]} for t in train_examples_augmented]
+
+    with open('data/optimization_data.json', 'w') as f:
+        json.dump(train_examples, f)
+
+    with open('data/optimization_data_augmented.json', 'w') as f:
+        json.dump(train_examples_augmented, f)
+"""
