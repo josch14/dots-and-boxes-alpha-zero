@@ -13,14 +13,14 @@ mcts_parameters:
 
 # neural network parameters
 model_parameters:
-  hidden_layers: [512, 512, 512]  # hidden layers with corresponding number of units
-  dropout      : 0.1         # dropout after each layer except output
+  hidden_layers: [128, 128]  # hidden layers with corresponding number of units
+  dropout      : 0.0         # dropout after each layer except output
 
 # neural network training: optimizer parameters
 optimizer_parameters:
   learning_rate: 0.01    # learning rate for SGD (AlphaGo Zero: learning rate scheduling)
   momentum     : 0.9     # momentum factor for SGD (AlphaGo Zero: 0.9)
-  weight_decay : 0.0001  # L2 weight regularization (AlphaGo Zero: 1e-4)
+  weight_decay : 0.00001  # L2 weight regularization (AlphaGo Zero: 1e-4)
 
 # neural network training: data parameters
 data_parameters:

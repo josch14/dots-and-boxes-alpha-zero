@@ -11,3 +11,4 @@ from .players.random import RandomPlayer
 
 from .utils.printer import DotsAndBoxesPrinter
 from .utils import istarmap
+from .utils.checkpoint import Checkpoint
