@@ -1,6 +1,6 @@
 import time
 from multiprocessing import Pool
-from random import shuffle
+import random
 import numpy as np
 import torch
 from copy import deepcopy
@@ -25,7 +25,7 @@ class Trainer:
         board size (width & height) of a Dots-and-Boxes game
     mcts_parameters : dict
         hyperparameters concerning the MCTS
-    model_parameters, optimizer_parameters, training_parameters : dict, dict, dict
+    model_parameters, optimizer_parameters, data_parameters : dict, dict, dict
         hyperparameters concerning the neural network (architecture, training, optimizer)
     evaluator_parameters : dict
         hyperparameters concerning the evaluator
@@ -39,9 +39,9 @@ class Trainer:
         device with which model interference is performed during MCTS
     training_device : torch.cuda.device
         device with which model training is performed
-    train_examples_per_game : List[List[[np.ndarray, [float], float]]]
+    train_examples_per_game_augmented : List[List[[np.ndarray, [float], float]]]
         list (one element corresponds with single self-play), containing lists of training examples (s, p, v)-tuples (from
-        the current player's POV)
+        the current player's POV, including augmentations)
     """
     def __init__(self, config: dict, model_name: str, n_workers: int, inference_device: str, training_device: str):
 
@@ -49,7 +49,7 @@ class Trainer:
         self.mcts_parameters = config["mcts_parameters"]
         self.model_parameters = config["model_parameters"]
         self.optimizer_parameters = config["optimizer_parameters"]
-        self.training_parameters = config["training_parameters"]
+        self.data_parameters = config["data_parameters"]
         self.evaluator_parameters = config["evaluator_parameters"]
 
         self.n_workers = n_workers
@@ -106,7 +106,7 @@ class Trainer:
             self.train_examples_per_game_augmented.extend(train_examples_per_game_augmented)
 
             # cut dataset to desired size
-            while len(self.train_examples_per_game_augmented) > self.training_parameters["game_buffer"]:
+            while len(self.train_examples_per_game_augmented) > self.data_parameters["game_buffer"]:
                 self.train_examples_per_game_augmented.pop(0)
 
 
@@ -122,8 +122,8 @@ class Trainer:
             # generation, and also becomes the baseline for subsequent comparisons
             win_fraction = self.evaluator_parameters["win_fraction"]
             n_games = self.evaluator_parameters["n_games"]
+            neural_network_player = NeuralNetworkPlayer(self.model, name=f"UpdatedModel(Iteration={iteration})")
 
-            neural_network_player = NeuralNetworkPlayer(self.model, name=f"TrainedModel(Iteration={iteration})")
             opponents = [RandomPlayer(), AlphaBetaPlayer(depth=1), AlphaBetaPlayer(depth=2), AlphaBetaPlayer(depth=3)]
             # 3.1) compare against non-neural network players
             for opponent in opponents:
@@ -133,21 +133,21 @@ class Trainer:
                     player2=opponent,
                     n_games=n_games
                 )
-                evaluator.compare()
+                evaluator.compare(n_workers=self.n_workers)
 
             # 3.2) compare against previous model
             evaluator = Evaluator(
                 game_size=self.game_size,
-                player1=NeuralNetworkPlayer(self.model, name=f"TrainedModel(Iteration={iteration})"),
+                player1=neural_network_player,
                 player2=NeuralNetworkPlayer(prev_model, name=f"PreviousModel(Iteration={iteration_of_best_model})"),
                 n_games=n_games
             )
             _, _, _, win_percent = evaluator.compare()
 
-            print(f"Trained model won {round(win_percent * 100, 2)}% of the games vs. previous model ({round(win_fraction * 100, 2)}% needed).")
+            print(f"Updated model won {round(win_percent * 100, 2)}% of the games vs. previous model ({round(win_fraction * 100, 2)}% needed).")
             if win_percent >= win_fraction:
                 iteration_of_best_model = iteration
-                print("Continuing with trained model!")
+                print("Continuing with updated model!")
                 if self.model_name:
                     self.model.save_checkpoint(model_name=self.model_name + f"_{iteration}")
             else:
@@ -255,7 +255,7 @@ class Trainer:
 
     def perform_model_training(self):
         """
-        Train the already existing neural network using the training data which was generated from self-play.
+        Update the already existing neural network using the training data which was generated from self-play.
 
         Loss Function: The neural network is adjusted to minimize the error between the predicted value and the self-play
         winner, and to maximize the similarity of the neural network move probabilities to the search probabilities
@@ -267,11 +267,34 @@ class Trainer:
         opposed to the original paper, without learning rate annealing).
         """
 
-        # run a complete training for a neural network
-        game_buffer = self.training_parameters["game_buffer"]
-        n_batches = self.training_parameters["n_batches"]
-        batch_size = self.training_parameters["batch_size"]
+        # prepare data
+        game_buffer = self.data_parameters["game_buffer"]
+        n_batches = self.data_parameters["n_batches"]
+        batch_size = self.data_parameters["batch_size"]
 
+        # sample specific number of batches. Model is updated once with each batch
+        train_examples = [t for t_list in self.train_examples_per_game_augmented for t in t_list]
+
+        print(f"Model will be updated with {n_batches:,} batches of size {batch_size:,}, "
+              f"sampled randomly from {len(train_examples):,} \ntraining examples (incl. augmentations) from the "
+              f"{len(self.train_examples_per_game_augmented):,}/{game_buffer:,} most recent games.")
+
+        print("Preparing batches .. ", end="")
+        start_time = time.time()
+
+        s_batched, p_batched, v_batched = [], [], []
+        for i in range(n_batches):
+            batch = random.sample(train_examples, batch_size)
+            s, p, v = [list(t) for t in zip(*batch)]
+            s_batched.append(torch.tensor(np.vstack(s), dtype=torch.float32, device=self.training_device))
+            p_batched.append(torch.tensor(np.vstack(p), dtype=torch.float32, device=self.training_device))
+            v_batched.append(torch.tensor(v, dtype=torch.float32, device=self.training_device))  # scalar v
+        print("finished after {0:.2f}s".format(time.time() - start_time))
+
+
+        # loss Functions and optimizer
+        CrossEntropyLoss = torch.nn.CrossEntropyLoss()
+        MSELoss = torch.nn.MSELoss()
         optimizer = torch.optim.SGD(
             self.model.parameters(),
             lr=self.optimizer_parameters["learning_rate"],
@@ -279,74 +302,36 @@ class Trainer:
             weight_decay=self.optimizer_parameters["weight_decay"],
         )
 
-        # prepare data
-        # augment dataset by including rotations and reflections of each position (and probs vector!)
-        train_examples = [t for t_list in self.train_examples_per_game_augmented for t in t_list]
 
-        print(f"The model is updated with {len(train_examples):,} training examples (including augmentations) from the "
-              f"{len(self.train_examples_per_game_augmented):,}/{game_buffer:,} most recent games.")
-
-        # shuffle and batch data
-        # TODO we want n_batches, each with batch_size training examples. Sample those randomly from the list of training examples
-        shuffle(train_examples)
-        s_train, p_train, v_train = [list(t) for t in zip(*train_examples)]
-        s_batched, p_batched, v_batched = [], [], []
-        for i in range(0, len(train_examples), batch_size):
-            s_batched.append(torch.tensor(np.vstack(s_train[i:i + batch_size]), dtype=torch.float32, device=self.training_device))
-            p_batched.append(torch.tensor(np.vstack(p_train[i:i + batch_size]), dtype=torch.float32, device=self.training_device))
-            v_batched.append(torch.tensor(v_train[i:i + batch_size], dtype=torch.float32, device=self.training_device))  # scalar v
-        n_batches = len(s_batched)
-
-        current_patience = 0
-        best_model = None
-        best_loss = 1e10
-
-        CrossEntropyLoss = torch.nn.CrossEntropyLoss()
-        MSELoss = torch.nn.MSELoss()
-
+        # train model
+        print("Updating model .. ", end="")
+        self.model.train()
         self.model.to(self.training_device)
 
-        # TODO loop over batches --> no epoch anymore
-        for epoch in range(1, epochs + 1):
+        start_time = time.time()
 
-            if current_patience > patience:
-                print(f"Early stopping after {epoch} epochs.")
-                break
+        for i in range(n_batches):
+            optimizer.zero_grad()
 
-            start_time = time.time()
+            p, v = self.model.forward(s_batched[i])
 
-            # train model
-            self.model.train()
+            loss = CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
+            loss.backward()
+            optimizer.step()
+
+        # evaluate model on same data
+        self.model.eval()
+        with torch.no_grad():
+            # calculate loss per training example
+            loss = 0
             for i in range(n_batches):
                 optimizer.zero_grad()
-
                 p, v = self.model.forward(s_batched[i])
+                loss += CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
+            loss = loss / n_batches
 
-                loss = CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
-                loss.backward()
-                optimizer.step()
+        print("finished after {0:.2f}s".format(time.time() - start_time))
+        print("Loss: {0:.5f}".format(loss))
 
-            # evaluate model on train set
-            self.model.eval()
-            with torch.no_grad():
-                # calculate loss per training example
-                loss = 0
-                for i in range(n_batches):
-                    optimizer.zero_grad()
-                    p, v = self.model.forward(s_batched[i])
-                    loss += CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
-                loss = loss / n_batches
-
-                print("[Epoch {0:d}] Loss: {1:.5f} (after {2:.2f}s). ".format(epoch, loss, time.time() - start_time), end="")
-
-                if loss < best_loss:
-                    best_loss = loss
-                    best_model = deepcopy(self.model)
-                    current_patience = 0
-                    print("New best model achieved!")
-                else:
-                    current_patience += 1
-                    print("")
-
-        self.model = best_model
         self.model.to(self.inference_device)
+
