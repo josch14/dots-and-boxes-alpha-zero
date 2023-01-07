@@ -124,7 +124,7 @@ class Trainer:
             n_games = self.evaluator_parameters["n_games"]
             neural_network_player = NeuralNetworkPlayer(self.model, name=f"UpdatedModel(Iteration={iteration})")
 
-            opponents = [RandomPlayer(), AlphaBetaPlayer(depth=1), AlphaBetaPlayer(depth=2), AlphaBetaPlayer(depth=3)]
+            opponents = [RandomPlayer(), AlphaBetaPlayer(depth=1), AlphaBetaPlayer(depth=2)] #, AlphaBetaPlayer(depth=3)]
             # 3.1) compare against non-neural network players
             for opponent in opponents:
                 evaluator = Evaluator(

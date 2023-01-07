@@ -7,7 +7,7 @@ from trainer import Trainer
 
 """
 Example call: 
-python train.py -c my_model
+python train.py --n_workers 4 --training_device cpu
 """
 parser = argparse.ArgumentParser()
 parser.add_argument('-m', '--model', type=str, default="model",
