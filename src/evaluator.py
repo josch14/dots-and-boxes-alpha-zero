@@ -1,4 +1,7 @@
+from multiprocessing import Pool
+from sys import stdout
 from typing import Tuple
+from tqdm import tqdm
 
 # local import
 from .game import DotsAndBoxesGame
@@ -18,6 +21,7 @@ class Evaluator:
     n_games : int
         number of games the models play against each other
     """
+
     def __init__(self, game_size: int, player1: AIPlayer, player2: AIPlayer, n_games: int):
 
         self.game_size = game_size
@@ -25,20 +29,22 @@ class Evaluator:
         self.player2 = player2
         self.n_games = n_games
 
-    def compare(self) -> Tuple[int, int, int, float]:
+    def compare(self, n_workers: int = 1) -> Tuple[int, int, int, float]:
 
         wins_player1, wins_player2, draws = 0, 0, 0
 
         print(f"Comparing {self.player1.name}:Draw:{self.player2.name} ... ")
-        for _ in range(self.n_games):
-            result = self.play_game()
 
-            if result == 1:
-                wins_player1 += 1
-            elif result == -1:
-                wins_player2 += 1
-            else:
-                draws += 1
+        with Pool(processes=n_workers) as pool:
+            for result in pool.istarmap(self.play_game, tqdm([()] * self.n_games, file=stdout, smoothing=0.0)):
+
+                if result == 1:
+                    wins_player1 += 1
+                elif result == -1:
+                    wins_player2 += 1
+                else:
+                    draws += 1
+
         print(f"Result: {wins_player1}:{draws}:{wins_player2}")
 
         win_percent_player1 = wins_player1 / self.n_games
