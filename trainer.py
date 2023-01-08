@@ -1,3 +1,4 @@
+import json
 import time
 from multiprocessing import Pool
 import random
@@ -9,7 +10,7 @@ from sys import stdout
 
 # local import
 from src import Evaluator, DotsAndBoxesGame, MCTS, AZNeuralNetwork, \
-    AlphaBetaPlayer, NeuralNetworkPlayer, RandomPlayer, Checkpoint, istarmap
+    AlphaBetaPlayer, NeuralNetworkPlayer, RandomPlayer, Checkpoint, functions
 
 
 class Trainer:
@@ -42,6 +43,7 @@ class Trainer:
     """
     def __init__(self, config: dict, model_name: str, n_workers: int, inference_device: str, training_device: str):
 
+        functions.print_parameters(config)
         self.game_size = config["game_size"]
         self.mcts_parameters = config["mcts_parameters"]
         self.model_parameters = config["model_parameters"]
@@ -55,11 +57,8 @@ class Trainer:
             assert torch.cuda.is_available()
         self.inference_device = torch.device(inference_device)
         self.training_device = torch.device(training_device)
-        print(f"Model inference (during MCTS) is performed with device: {self.inference_device}")
-        print(f"Model training is performed with device: {self.training_device}")
-        print(f"[Model parameters] "
-              "hidden_layers: " + str(self.model_parameters["hidden_layers"]) + ", " 
-              "dropout: " + str(self.model_parameters["dropout"]))
+        print(f"\nModel inference device: {self.inference_device}")
+        print(f"Model training device: {self.training_device}")
 
         # initialize models (potentially from checkpoint)
         self.model = AZNeuralNetwork(
@@ -72,8 +71,6 @@ class Trainer:
             self.model.load_checkpoint(model_name)
         self.best_model = copy.deepcopy(self.model)
 
-        self.model.to(self.inference_device)  # updated model
-        self.best_model.to(self.inference_device)  # used for self-play
 
 
     def loop(self, n_iterations: int):
@@ -92,23 +89,19 @@ class Trainer:
 
             # 1) perform games of self-play to obtain training data
             print("------------ Self-play using MCTS ------------")
-            train_examples_per_game = self.perform_self_plays(n_games=self.mcts_parameters["n_games"])
+            train_examples_per_game = self.perform_self_plays(
+                game_size=self.game_size,
+                model=self.best_model,
+                mcts_parameters=self.mcts_parameters,
+                n_workers=self.n_workers,
+                device=self.inference_device
+            )
 
-            # augment train examples for each game
-            new_data = []
-            for train_examples in train_examples_per_game:
-                train_examples_augmented = []
-                for s, p, v in train_examples:
-                    train_examples_augmented.extend(zip(
-                        DotsAndBoxesGame.get_rotations_and_reflections(s),
-                        DotsAndBoxesGame.get_rotations_and_reflections(np.asarray(p)),
-                        [v] * 8
-                    ))
-                new_data.append(train_examples_augmented)
-
-            # training examples are the training examples from last iteration + generated training examples
+            # training examples are the training examples from last iteration + (augmented) generated training examples
             train_examples_per_game_augmented = Checkpoint.load_data() if iteration > 1 else []
-            train_examples_per_game_augmented.extend(new_data)
+            train_examples_per_game_augmented.extend(
+                self.augment_data(train_examples_per_game)
+            )
 
             # cut dataset to desired size and save data for next iteration
             while len(train_examples_per_game_augmented) > self.data_parameters["game_buffer"]:
@@ -118,40 +111,52 @@ class Trainer:
 
             # 2) model learning
             print("\n---------- Neural Network Training -----------")
-            self.perform_model_training(train_examples_per_game_augmented)
+            self.perform_model_training(
+                model=self.model,
+                train_examples_per_game_augmented=train_examples_per_game_augmented,
+                data_parameters=self.data_parameters,
+                optimizer_parameters=self.optimizer_parameters,
+                device=self.training_device
+            )
 
 
             # 3) evaluator: model comparison
             print("\n-------------- Model Comparison --------------")
-            self.model.eval()
-            self.best_model.eval()
             # if the trained network wins by a margin of > win_fraction, then it is subsequently used for self-play
             # generation, and also becomes the baseline for subsequent comparisons
-            win_fraction = self.evaluator_parameters["win_fraction"]
-            n_games = self.evaluator_parameters["n_games"]
-            neural_network_player = NeuralNetworkPlayer(self.model, name=f"UpdatedModel(Iteration={iteration})")
+            neural_network_player = NeuralNetworkPlayer(
+                model=self.model,
+                name=f"UpdatedModel(Iteration={iteration})",
+                device=self.inference_device
+            )
 
-            opponents = [RandomPlayer(), AlphaBetaPlayer(depth=1), AlphaBetaPlayer(depth=2), AlphaBetaPlayer(depth=3)]
             # 3.1) compare against non-neural network players
-            for opponent in opponents:
-                evaluator = Evaluator(
+            for opponent in [RandomPlayer(), AlphaBetaPlayer(depth=1), AlphaBetaPlayer(depth=2), AlphaBetaPlayer(depth=3)]:
+                Evaluator(
                     game_size=self.game_size,
                     player1=neural_network_player,
                     player2=opponent,
-                    n_games=n_games
-                )
-                evaluator.compare(n_workers=self.n_workers)
+                    n_games=self.evaluator_parameters["n_games"],
+                    n_workers=self.n_workers
+                ).compare()
 
             # 3.2) compare against previous model
-            evaluator = Evaluator(
+            wins_updated, wins_best, draws = Evaluator(
                 game_size=self.game_size,
                 player1=neural_network_player,
-                player2=NeuralNetworkPlayer(self.best_model, name=f"PreviousModel(Iteration={iteration_of_best_model})"),
-                n_games=n_games
-            )
-            _, _, _, win_percent = evaluator.compare()
+                player2=NeuralNetworkPlayer(
+                    model=self.best_model,
+                    name=f"PreviousModel(Iteration={iteration_of_best_model})",
+                    device=self.inference_device
+                ),
+                n_games=self.evaluator_parameters["n_games"],
+                n_workers=self.n_workers
+            ).compare()
 
-            print(f"Updated model won {round(win_percent * 100, 2)}% of the games vs. previous model ({round(win_fraction * 100, 2)}% needed).")
+            win_percent = (wins_updated + 0.5 * draws) / (wins_updated + wins_best + draws)
+            win_fraction = self.evaluator_parameters["win_fraction"]
+            print(f"Updated model won {round(win_percent * 100, 2)}% of the games (draw = half win) vs. previous model ({round(win_fraction * 100, 2)}% needed).")
+
             if win_percent >= win_fraction:
                 iteration_of_best_model = iteration
                 self.best_model = copy.deepcopy(self.model)
@@ -164,7 +169,8 @@ class Trainer:
             print("###########################################################")
 
 
-    def perform_self_plays(self, n_games: int):
+    @staticmethod
+    def perform_self_plays(game_size: int, model: AZNeuralNetwork, mcts_parameters: dict, n_workers: int, device: torch.device):
         """
         Perform games of self-play using MCTS.
 
@@ -178,14 +184,18 @@ class Trainer:
         train_examples : List[[np.ndarray, [float], float]]
             list of training examples (s, p, v) (from the current player's POV)
         """
-        train_examples_per_game = []
-        self.best_model.eval()
+        # model inference
+        model.eval()
+        model.to(device)
 
         start_time = time.time()
-        with Pool(processes=self.n_workers) as pool:
-            for train_examples in pool.istarmap(self.perform_self_play, tqdm([()] * n_games, file=stdout, smoothing=0.0)):
-                train_examples_per_game.append(train_examples)
+        n_games = mcts_parameters["n_games"]
+        args = (game_size, model, mcts_parameters)
 
+        train_examples_per_game = []
+        with Pool(processes=n_workers) as pool:
+            for train_examples in pool.istarmap(Trainer.perform_self_play, tqdm([args] * n_games, file=stdout, smoothing=0.0)):
+                train_examples_per_game.append(train_examples)
 
         print("{0:,} games of Self-play resulted in {1:,} new training examples (without augmentations; after {2:.2f}s).".format(
             n_games, len([t for l in train_examples_per_game for t in l]), time.time() - start_time))
@@ -193,7 +203,8 @@ class Trainer:
         return train_examples_per_game
 
 
-    def perform_self_play(self):
+    @staticmethod
+    def perform_self_play(game_size: int, model: AZNeuralNetwork, mcts_parameters: dict):
         """
         Perform a single game of self-play using MCTS. The data for the game is stored as (s, p, v) at each
         time-step (i.e., each turn results in a training example), with s being the position/game state (vector),
@@ -205,21 +216,21 @@ class Trainer:
             list of training examples (s, p, v) (from the current player's POV)
         """
 
-        game = DotsAndBoxesGame(self.game_size)
+        game = DotsAndBoxesGame(game_size)
         n_moves = 0
         train_examples = []
 
         # one self-play corresponds with one tree
         mcts = MCTS(
-            model=self.best_model,
+            model=model,
             s=copy.deepcopy(game),
-            mcts_parameters=self.mcts_parameters
+            mcts_parameters=mcts_parameters
         )
 
         # when more than temperature_move_threshold moves were performed during self-play, the temperature parameter
         # is set from 1 to 0. This ensures that a diverse set of positions are encountered, as then the first moves
         # during MCTS are selected proportionally to their visit count
-        temperature_move_threshold = self.mcts_parameters["temperature_move_threshold"]
+        temperature_move_threshold = mcts_parameters["temperature_move_threshold"]
 
         # iteration over time-steps t during the game. At each time-step, a MCTS is executed using the previous iteration
         # of the neural network and a move is played by sampling the search probabilities
@@ -260,7 +271,8 @@ class Trainer:
         return train_examples
 
 
-    def perform_model_training(self, train_examples_per_game_augmented: list):
+    @staticmethod
+    def perform_model_training(model: AZNeuralNetwork, train_examples_per_game_augmented: list, data_parameters: dict, optimizer_parameters: dict, device: torch.device):
         """
         Update the already existing neural network using the training data which was generated from self-play.
 
@@ -279,9 +291,9 @@ class Trainer:
         """
 
         # prepare data
-        game_buffer = self.data_parameters["game_buffer"]
-        n_batches = self.data_parameters["n_batches"]
-        batch_size = self.data_parameters["batch_size"]
+        game_buffer = data_parameters["game_buffer"]
+        n_batches = data_parameters["n_batches"]
+        batch_size = data_parameters["batch_size"]
 
         # sample specific number of batches. Model is updated once with each batch
         train_examples = [t for t_list in train_examples_per_game_augmented for t in t_list]
@@ -297,9 +309,9 @@ class Trainer:
         for i in range(n_batches):
             batch = random.sample(train_examples, batch_size)
             s, p, v = [list(t) for t in zip(*batch)]
-            s_batched.append(torch.tensor(np.vstack(s), dtype=torch.float32, device=self.training_device))
-            p_batched.append(torch.tensor(np.vstack(p), dtype=torch.float32, device=self.training_device))
-            v_batched.append(torch.tensor(v, dtype=torch.float32, device=self.training_device))  # scalar v
+            s_batched.append(torch.tensor(np.vstack(s), dtype=torch.float32, device=device))
+            p_batched.append(torch.tensor(np.vstack(p), dtype=torch.float32, device=device))
+            v_batched.append(torch.tensor(v, dtype=torch.float32, device=device))  # scalar v
         print("finished after {0:.2f}s".format(time.time() - start_time))
 
 
@@ -307,42 +319,55 @@ class Trainer:
         CrossEntropyLoss = torch.nn.CrossEntropyLoss()
         MSELoss = torch.nn.MSELoss()
         optimizer = torch.optim.SGD(
-            self.model.parameters(),
-            lr=self.optimizer_parameters["learning_rate"],
-            momentum=self.optimizer_parameters["momentum"],
-            weight_decay=self.optimizer_parameters["weight_decay"],
+            model.parameters(),
+            lr=optimizer_parameters["learning_rate"],
+            momentum=optimizer_parameters["momentum"],
+            weight_decay=optimizer_parameters["weight_decay"],
         )
 
-
-        # train model
         print("Updating model .. ", end="")
-        self.model.train()
-        self.model.to(self.training_device)
+        # model update
+        model.train()
+        model.to(device)
 
         start_time = time.time()
 
         for i in range(n_batches):
             optimizer.zero_grad()
 
-            p, v = self.model.forward(s_batched[i])
+            p, v = model.forward(s_batched[i])
 
             loss = CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
             loss.backward()
             optimizer.step()
 
         # evaluate model on same data
-        self.model.eval()
+        model.eval()
         with torch.no_grad():
             # calculate loss per training example
             loss = 0
             for i in range(n_batches):
                 optimizer.zero_grad()
-                p, v = self.model.forward(s_batched[i])
+                p, v = model.forward(s_batched[i])
                 loss += CrossEntropyLoss(p, p_batched[i]) + MSELoss(v, v_batched[i])
             loss = loss / n_batches
 
         print("finished after {0:.2f}s".format(time.time() - start_time))
         print("Loss: {0:.5f}".format(loss))
 
-        self.model.to(self.inference_device)
 
+    @staticmethod
+    def augment_data(data: list):
+
+        data_augmented = []
+        for train_examples in data:
+            train_examples_augmented = []
+            for s, p, v in train_examples:
+                train_examples_augmented.extend(zip(
+                    DotsAndBoxesGame.get_rotations_and_reflections(s),
+                    DotsAndBoxesGame.get_rotations_and_reflections(np.asarray(p)),
+                    [v] * 8
+                ))
+            data_augmented.append(train_examples_augmented)
+
+        return data_augmented

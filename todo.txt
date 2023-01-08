@@ -1,0 +1,21 @@
+- arena: mcts?!
+- todo: comment data checkpoint (why do that?)
+
+
+- mode load from checkpoint: check size if ok
+- model saving / data saving
+- tensorboard
+
+
+
+INFO
+- AlphaGo Zero: -700,000 mini-batches of 2048 training examples (= 1,433,000,000 training examples, around 1.8 epochs then)
+                - sampled from 500,000 games (from 20 iterations a 25,000) (a 200 moves = 100,000,000 training examples -> augmented: 800,000,000 training examples)
+-           we: - 8,000 mini-batches of 2048 training examples (= 16,384,000 training examples, around 2 epochs then)
+                - 16,000 mini-batches of 1024 training examples (= 16,384,000 training examples, around 2 epochs then)
+                - 32,000 mini-batches of 512 training examples (= 16,384,000 training examples, around 2 epochs then)
+                - sampled from 50,000 games (from 20 iterations a 2,500) (a 20 moves = 1,000,000 training examples -> augmented: 8,000,000 training examples)
+- INFO: Only train for around 2 epochs per training loop iteration makes sense: each recorded data will be used in training of 20 iterations, while
+  training data always improves in parallel (-> does not make sense to train longer with old data anyway)
+
+

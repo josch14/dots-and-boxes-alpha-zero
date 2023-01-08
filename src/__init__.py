@@ -10,5 +10,5 @@ from .players.alpha_beta import AlphaBetaPlayer
 from .players.random import RandomPlayer
 
 from .utils.printer import DotsAndBoxesPrinter
-from .utils import istarmap
 from .utils.checkpoint import Checkpoint
+from .utils import functions
