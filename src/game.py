@@ -203,7 +203,7 @@ class DotsAndBoxesGame:
 
         Returns
         -------
-        equivalents : List[np.ndarray]
+        equivalents : [np.ndarray]
             all rotations and reflections of current position s (8 positions, including s itself)
         """
 

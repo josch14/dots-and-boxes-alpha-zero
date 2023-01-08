@@ -55,7 +55,7 @@ class MCTS:
 
         Returns
         -------
-        probs : List[float]
+        probs : [float]
             move probabilities pi(a) ~ N(s,a)^(1/temp)
         """
 

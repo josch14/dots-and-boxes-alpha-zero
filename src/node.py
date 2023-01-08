@@ -12,7 +12,7 @@ class AZNode:
         position corresponding to the node (more accurate: s is the game stat which includes the position vector s)
     a : int
         move that was executed at the parent's position, resulting in this node's position s
-    children : List[AZNode]
+    children : [AZNode]
         child nodes
     Q : dict
         action values Q[a] = Q(s,a)
