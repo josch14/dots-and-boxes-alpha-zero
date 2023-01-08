@@ -18,9 +18,8 @@ class AlphaBetaPlayer(AIPlayer):
 
     def determine_move(self, game: DotsAndBoxesGame) -> int:
 
-        # let the first four moves be random in order to drastically reduce computation time
-        # TODO do similar thing for other games sizes?
-        if game.SIZE == 3:
+        # let the first four moves be random in order to drastically reduce computation time (not for games with size=2)
+        if game.SIZE >= 3:
             s = game.s
             if np.count_nonzero(s) < 4:
                 # 1) first check whether there already is a box with three lines (simple misplay by opponent)
