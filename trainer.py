@@ -183,7 +183,7 @@ class Trainer:
                 train_examples_per_game.append(train_examples)
 
 
-        print("{0:d} games of Self-play resulted in {1:d} new training examples (without augmentations; after {2:.2f}s).".format(
+        print("{0:,} games of Self-play resulted in {1:,} new training examples (without augmentations; after {2:.2f}s).".format(
             n_games, len([t for l in train_examples_per_game for t in l]), time.time() - start_time))
 
         return train_examples_per_game

@@ -21,7 +21,7 @@ parser.add_argument('-tdev', '--training_device', type=str, default="cuda", choi
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    CONFIG_FILE = "resources/train_config.yaml"
+    CONFIG_FILE = "resources/train_config_size=2.yaml"
 
     with open(CONFIG_FILE) as f:
         config = yaml.safe_load(f)
