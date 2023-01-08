@@ -3,7 +3,7 @@ from multiprocessing import Pool
 import random
 import numpy as np
 import torch
-from copy import deepcopy
+import copy
 from tqdm import tqdm
 from sys import stdout
 
@@ -61,7 +61,7 @@ class Trainer:
               "hidden_layers: " + str(self.model_parameters["hidden_layers"]) + ", " 
               "dropout: " + str(self.model_parameters["dropout"]))
 
-        # initialize model (potentially from checkpoint)
+        # initialize models (potentially from checkpoint)
         self.model = AZNeuralNetwork(
             game_size=self.game_size,
             model_parameters=self.model_parameters,
@@ -70,7 +70,10 @@ class Trainer:
         self.model_name = model_name
         if model_name:
             self.model.load_checkpoint(model_name)
-        self.model.to(self.inference_device)
+        self.best_model = copy.deepcopy(self.model)
+
+        self.model.to(self.inference_device)  # updated model
+        self.best_model.to(self.inference_device)  # used for self-play
 
 
     def loop(self, n_iterations: int):
@@ -115,12 +118,13 @@ class Trainer:
 
             # 2) model learning
             print("\n---------- Neural Network Training -----------")
-            prev_model = deepcopy(self.model)
             self.perform_model_training(train_examples_per_game_augmented)
 
 
             # 3) evaluator: model comparison
             print("\n-------------- Model Comparison --------------")
+            self.model.eval()
+            self.best_model.eval()
             # if the trained network wins by a margin of > win_fraction, then it is subsequently used for self-play
             # generation, and also becomes the baseline for subsequent comparisons
             win_fraction = self.evaluator_parameters["win_fraction"]
@@ -142,7 +146,7 @@ class Trainer:
             evaluator = Evaluator(
                 game_size=self.game_size,
                 player1=neural_network_player,
-                player2=NeuralNetworkPlayer(prev_model, name=f"PreviousModel(Iteration={iteration_of_best_model})"),
+                player2=NeuralNetworkPlayer(self.best_model, name=f"PreviousModel(Iteration={iteration_of_best_model})"),
                 n_games=n_games
             )
             _, _, _, win_percent = evaluator.compare()
@@ -150,12 +154,12 @@ class Trainer:
             print(f"Updated model won {round(win_percent * 100, 2)}% of the games vs. previous model ({round(win_fraction * 100, 2)}% needed).")
             if win_percent >= win_fraction:
                 iteration_of_best_model = iteration
-                print("Continuing with updated model!")
+                self.best_model = copy.deepcopy(self.model)
+                print("New best model: Data generation with self-play is now executed using the updated model.")
                 if self.model_name:
                     self.model.save_checkpoint(model_name=self.model_name + f"_{iteration}")
             else:
-                print(f"Continuing with previous best model from iteration {iteration_of_best_model}!")
-                self.model = prev_model
+                print(f"Continuing data generation with self-play using previous best model from iteration {iteration_of_best_model}.")
 
             print("###########################################################")
 
@@ -175,7 +179,7 @@ class Trainer:
             list of training examples (s, p, v) (from the current player's POV)
         """
         train_examples_per_game = []
-        self.model.eval()
+        self.best_model.eval()
 
         start_time = time.time()
         with Pool(processes=self.n_workers) as pool:
@@ -207,8 +211,8 @@ class Trainer:
 
         # one self-play corresponds with one tree
         mcts = MCTS(
-            model=self.model,
-            s=deepcopy(game),
+            model=self.best_model,
+            s=copy.deepcopy(game),
             mcts_parameters=self.mcts_parameters
         )
 

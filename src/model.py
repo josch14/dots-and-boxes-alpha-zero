@@ -114,7 +114,8 @@ class AZNeuralNetwork(nn.Module):
         s = s.unsqueeze(0)  # ... batch due to batch normalization
 
         # cpu only necessary when gpu is used
-        p, v = self.forward(s)
+        with torch.no_grad():
+            p, v = self.forward(s)
         p = p.squeeze().detach().cpu().numpy()
         v = v.detach().cpu().item()
 
